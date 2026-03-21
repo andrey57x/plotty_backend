@@ -18,10 +18,11 @@ type Config struct {
 	DBPassword string `mapstructure:"ML_DB_PASSWORD"`
 	DBName     string `mapstructure:"ML_DB_NAME"`
 
-	MinioEndpoint string `mapstructure:"MINIO_ENDPOINT"`
-	MinioUser     string `mapstructure:"MINIO_ROOT_USER"`
-	MinioPassword string `mapstructure:"MINIO_ROOT_PASSWORD"`
-	MinioBucket   string `mapstructure:"MINIO_BUCKET_NAME"`
+	MinioEndpoint   string `mapstructure:"MINIO_ENDPOINT"`
+	MinioPublicURL  string `mapstructure:"MINIO_PUBLIC_URL"` // публичный URL для ссылок на объекты, напр. http://host:9000
+	MinioUser       string `mapstructure:"MINIO_ROOT_USER"`
+	MinioPassword   string `mapstructure:"MINIO_ROOT_PASSWORD"`
+	MinioBucket     string `mapstructure:"MINIO_BUCKET_NAME"`
 }
 
 // Добавь метод получения DSN (как в core)

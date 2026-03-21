@@ -34,6 +34,7 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 		cfg.MinioUser,
 		cfg.MinioPassword,
 		cfg.MinioBucket,
+		cfg.MinioPublicURL,
 	)
 	if err != nil {
 		return nil, err
