@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS generated_images;
+DROP TABLE IF EXISTS ai_jobs;
+DROP TABLE IF EXISTS story_tags;
+DROP TABLE IF EXISTS chapters;
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS stories;

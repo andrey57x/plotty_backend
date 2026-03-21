@@ -15,6 +15,7 @@ RUN go build -o /core-app ./cmd/core/main.go
 FROM alpine:latest
 WORKDIR /root/
 COPY --from=builder /core-app .
+COPY --from=builder /app/migrations ./migrations
 # Копируем .env из корня (он понадобится при запуске)
 COPY .env . 
 

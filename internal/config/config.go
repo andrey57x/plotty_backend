@@ -20,6 +20,8 @@ type Config struct {
 	RedisHost     string `mapstructure:"REDIS_HOST"`
 	RedisPort     string `mapstructure:"REDIS_PORT"`
 	RedisPassword string `mapstructure:"REDIS_PASSWORD"`
+
+	MLBaseURL string `mapstructure:"ML_BASE_URL"`
 }
 
 func Load() (*Config, error) {
@@ -34,6 +36,10 @@ func Load() (*Config, error) {
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("ошибка парсинга конфига: %w", err)
+	}
+
+	if cfg.HTTPPort == "" {
+		cfg.HTTPPort = "8080"
 	}
 
 	return &cfg, nil
