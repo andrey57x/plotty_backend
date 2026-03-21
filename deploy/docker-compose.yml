@@ -107,6 +107,21 @@ services:
     env_file:
       - ../.env
 
+  frontend:
+    build:
+      context: ../Plotty-frontend
+      dockerfile: ../plotty_backend/deploy/frontend.Dockerfile
+      args:
+        - BACKEND_URL=http://${MINIO_PUBLIC_IP}:8080
+    ports:
+      - "80:3000"
+    environment:
+      - BACKEND_URL=http://core-api:8080
+      - NEXT_PUBLIC_API_URL=http://${MINIO_PUBLIC_IP}:8080
+    restart: always
+    depends_on:
+      - core-api
+
 volumes:
   pgdata_core:
   pgdata_ml:
