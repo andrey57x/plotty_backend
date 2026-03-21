@@ -109,7 +109,7 @@ services:
 
   frontend:
     build:
-      context: ../Plotty-frontend
+      context: ../../plotty_frontend
       dockerfile: ../plotty_backend/deploy/frontend.Dockerfile
       args:
         - BACKEND_URL=http://${MINIO_PUBLIC_IP}:8080
