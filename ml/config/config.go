@@ -1,0 +1,51 @@
+package config
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/spf13/viper"
+)
+
+type Config struct {
+	RabbitMQURL     string `mapstructure:"RABBITMQ_URL"`
+	GigaChatAuthKey string `mapstructure:"GIGACHAT_AUTH_KEY"`
+	
+	// Добавляем эти поля:
+	DBHost     string `mapstructure:"ML_DB_HOST"`
+	DBPort     string `mapstructure:"ML_DB_PORT"`
+	DBUser     string `mapstructure:"ML_DB_USER"`
+	DBPassword string `mapstructure:"ML_DB_PASSWORD"`
+	DBName     string `mapstructure:"ML_DB_NAME"`
+
+	MinioEndpoint string `mapstructure:"MINIO_ENDPOINT"`
+	MinioUser     string `mapstructure:"MINIO_ROOT_USER"`
+	MinioPassword string `mapstructure:"MINIO_ROOT_PASSWORD"`
+	MinioBucket   string `mapstructure:"MINIO_BUCKET_NAME"`
+}
+
+// Добавь метод получения DSN (как в core)
+func (c *Config) GetDSN() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		c.DBUser, c.DBPassword, c.DBHost, "5432", c.DBName) // Внутри докера порт всегда 5432
+}
+
+func Load() (*Config, error) {
+	viper.SetConfigFile(".env")
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		log.Println("Не найден файл .env, используются переменные окружения ОС")
+	}
+
+	var cfg Config
+	if err := viper.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("ошибка парсинга ML конфига: %w", err)
+	}
+
+	if cfg.RabbitMQURL == "" {
+		cfg.RabbitMQURL = "amqp://guest:guest@localhost:5672/"
+	}
+
+	return &cfg, nil
+}

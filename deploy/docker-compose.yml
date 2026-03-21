@@ -1,5 +1,5 @@
 services:
-  db:
+  core-db:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -7,13 +7,66 @@ services:
       POSTGRES_DB: ${DB_NAME}
     ports:
       - "${DB_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata_core:/var/lib/postgresql/data
+
+  ml-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${ML_DB_USER}
+      POSTGRES_PASSWORD: ${ML_DB_PASSWORD}
+      POSTGRES_DB: ${ML_DB_NAME}
+    ports:
+      - "${ML_DB_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ML_DB_USER} -d ${ML_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgdata_ml:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
     ports:
       - "${REDIS_PORT}:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "${RABBITMQ_PORT}:5672"
+      - "${RABBITMQ_UI_PORT}:15672"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      - minio
+    env_file:
+      - ../.env
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}); do echo 'Waiting for MinIO...'; sleep 1; done;
+      /usr/bin/mc mb myminio/${MINIO_BUCKET_NAME} || true;
+      /usr/bin/mc anonymous set download myminio/${MINIO_BUCKET_NAME};
+      exit 0;
+      "
 
   core-api:
     build:
@@ -22,8 +75,10 @@ services:
     ports:
       - "${HTTP_PORT}:8080"
     depends_on:
-      - db
-      - redis
+      core-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     env_file:
       - ../.env
 
@@ -31,11 +86,21 @@ services:
     build:
       context: ..
       dockerfile: deploy/ml.Dockerfile
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ML_DB_HOST: ml-db
+      MINIO_ENDPOINT: minio:9000
     depends_on:
-      - db
-      - redis
+      ml-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
     env_file:
       - ../.env
 
 volumes:
-  pgdata:
+  pgdata_core:
+  pgdata_ml:
+  minio_data:
