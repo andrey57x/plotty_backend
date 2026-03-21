@@ -1,8 +1,9 @@
 package router
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
-	"strings"
 
 	aideliv "github.com/fivecode/plotty/core/ai/delivery"
 	airepo "github.com/fivecode/plotty/core/ai/repository"
@@ -10,7 +11,6 @@ import (
 	chdeliv "github.com/fivecode/plotty/core/chapter/delivery"
 	chrepo "github.com/fivecode/plotty/core/chapter/repository"
 	chuc "github.com/fivecode/plotty/core/chapter/usecase"
-	"github.com/fivecode/plotty/core/ml"
 	storydeliv "github.com/fivecode/plotty/core/story/delivery"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
 	storyuc "github.com/fivecode/plotty/core/story/usecase"
@@ -18,13 +18,15 @@ import (
 	tagrepo "github.com/fivecode/plotty/core/tag/repository"
 	taguc "github.com/fivecode/plotty/core/tag/usecase"
 	"github.com/fivecode/plotty/internal/config"
+	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 const uuidRe = `[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`
 
-func NewRouter(cfg *config.Config, pool *pgxpool.Pool) http.Handler {
+func NewRouter(cfg *config.Config, pool *pgxpool.Pool, rmqChan *amqp.Channel) http.Handler {
 	tr := tagrepo.New(pool)
 	sr := storyrepo.New(pool)
 	cr := chrepo.New(pool)
@@ -34,13 +36,25 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool) http.Handler {
 	su := storyuc.New(sr, tr, cr)
 	cu := chuc.New(cr, sr)
 
-	mlc := ml.NewClient(strings.TrimRight(cfg.MLBaseURL, "/"))
-	au := aiuc.New(ar, cr, mlc)
+	au := aiuc.New(ar, cr, rmqChan)
 
 	sd := storydeliv.New(su)
 	cd := chdeliv.New(cu)
 	td := tagdeliv.New(tu)
 	ad := aideliv.New(au)
+
+	go func() {
+		msgs, err := rmqChan.Consume("ml_results_queue", "core_worker", false, false, false, false, nil)
+		if err == nil {
+			for msg := range msgs {
+				var res rabbitmq.MLResultMessage
+				if err := json.Unmarshal(msg.Body, &res); err == nil {
+					_ = au.ProcessMLResult(context.Background(), res)
+				}
+				msg.Ack(false)
+			}
+		}
+	}()
 
 	r := mux.NewRouter()
 

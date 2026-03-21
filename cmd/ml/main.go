@@ -20,15 +20,19 @@ func main() {
 		log.Fatalf("Ошибка загрузки конфига: %v", err)
 	}
 
+	if err := infrastructure.RunMigrations(cfg.GetDSN(), "migrations/ml"); err != nil {
+		log.Fatalf("migrations error: %v", err)
+	}
+
 	rmqConn, err := rabbitmq.NewConnection(cfg.RabbitMQURL)
 	if err != nil {
 		log.Fatalf("Ошибка подключения к RabbitMQ: %v", err)
 	}
 
 	dbPool, err := infrastructure.NewPostgresPool(ctx, cfg.GetDSN())
-    if err != nil {
-        log.Fatalf("Ошибка БД: %v", err)
-    }
+	if err != nil {
+		log.Fatalf("Ошибка БД: %v", err)
+	}
 
 	application, err := app.NewApp(cfg, rmqConn, dbPool)
 	if err != nil {

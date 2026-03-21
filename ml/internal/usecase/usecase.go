@@ -10,23 +10,50 @@ import (
 
 	"github.com/fivecode/plotty/internal/infrastructure/gigachat"
 	storage "github.com/fivecode/plotty/internal/infrastructure/minio"
+	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/fivecode/plotty/ml/internal/models"
 	"github.com/fivecode/plotty/ml/internal/repository"
 	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type AIUsecase struct {
 	repo     repository.MLRepository
 	gigachat *gigachat.Client
 	storage  *storage.MinioStorage
+	rmqChan  *amqp.Channel // Добавлено для отправки ответа
 }
 
-func NewAIUsecase(repo repository.MLRepository, gc *gigachat.Client, st *storage.MinioStorage) *AIUsecase {
+func NewAIUsecase(repo repository.MLRepository, gc *gigachat.Client, st *storage.MinioStorage, rmqChan *amqp.Channel) *AIUsecase {
 	return &AIUsecase{
 		repo:     repo,
 		gigachat: gc,
 		storage:  st,
+		rmqChan:  rmqChan,
 	}
+}
+
+// Хелпер: сохраняет результат в БД и кидает ответ в очередь
+func (u *AIUsecase) publishResult(ctx context.Context, taskID uuid.UUID, status string, result any, errStr string) error {
+	_ = u.repo.UpdateTaskResult(ctx, taskID, status, result)
+
+	var resultRaw []byte
+	if result != nil {
+		resultRaw, _ = json.Marshal(result)
+	}
+
+	msg := rabbitmq.MLResultMessage{
+		TaskID: taskID.String(),
+		Status: status,
+		Result: resultRaw,
+		Error:  errStr,
+	}
+
+	body, _ := json.Marshal(msg)
+	return u.rmqChan.PublishWithContext(ctx, "", "ml_results_queue", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
 }
 
 const (
@@ -34,32 +61,33 @@ const (
 Ответь ТОЛЬКО в формате JSON, без маркдауна. Формат: {"summary": "текст", "items": [{"fragmentText": "...", "message": "...", "suggestion": "..."}]}`
 )
 
-func (u *AIUsecase) ProcessSpellcheck(ctx context.Context, taskID uuid.UUID, text string) error {
-	// Создаем запись в нашей БД
+func (u *AIUsecase) ProcessSpellcheck(ctx context.Context, taskID uuid.UUID, payload string) error {
+	// Достаем текст из пейлоада (Core шлет нам JSON)
+	var input struct {
+		Content string `json:"content"`
+	}
+	_ = json.Unmarshal([]byte(payload), &input)
+	text := input.Content
+
 	if err := u.repo.CreateTask(ctx, taskID, "spellcheck", text); err != nil {
 		return err
 	}
 
 	rawResponse, err := u.gigachat.SendChat(spellcheckSystemPrompt, text)
 	if err != nil {
-		u.repo.UpdateTaskResult(ctx, taskID, "failed", nil)
-		return err
+		return u.publishResult(ctx, taskID, "failed", nil, err.Error())
 	}
 
-	// ДОБАВЬ ЭТУ СТРОЧКУ, ЧТОБЫ УВИДЕТЬ, ЧТО ИМЕННО ПРИСЛАЛ ИИ
 	log.Printf("DEBUG: Raw AI response: %s", rawResponse)
 
-	// ИСПОЛЬЗУЕМ НОВУЮ ФУНКЦИЮ ДЛЯ ОЧИСТКИ
 	cleanJSON := extractJSON(rawResponse)
 	if cleanJSON == "" {
-		u.repo.UpdateTaskResult(ctx, taskID, "failed", map[string]string{"error": "AI returned non-json response"})
-		return fmt.Errorf("ИИ вернул не JSON ответ: %s", rawResponse)
+		return u.publishResult(ctx, taskID, "failed", nil, "AI returned non-json response")
 	}
 
 	var res models.SpellcheckResult
 	if err := json.Unmarshal([]byte(cleanJSON), &res); err != nil {
-		u.repo.UpdateTaskResult(ctx, taskID, "failed", map[string]string{"error": "invalid json from ai"})
-		return fmt.Errorf("невалидный JSON от ИИ: %w", err)
+		return u.publishResult(ctx, taskID, "failed", nil, "invalid json from ai")
 	}
 
 	contentLower := strings.ToLower(text)
@@ -71,70 +99,64 @@ func (u *AIUsecase) ProcessSpellcheck(ctx context.Context, taskID uuid.UUID, tex
 		}
 	}
 
-	return u.repo.UpdateTaskResult(ctx, taskID, "completed", res)
+	return u.publishResult(ctx, taskID, "completed", res, "")
 }
 
 const imagePromptEnhancer = `На основе текста главы и пожелания пользователя, составь детальный промпт для нейросети-художника. Опиши композицию, стиль, освещение, цвета. Ответь ТОЛЬКО текстом промпта, без вводных слов. Ограничься 200 символами.`
 
 func (u *AIUsecase) ProcessImageGen(ctx context.Context, taskID uuid.UUID, payload string) error {
-	// 0. Разбиваем payload
-	parts := strings.Split(payload, "|")
-	chapterText := parts[0]
-	userWish := ""
-	if len(parts) > 1 {
-		userWish = parts[1]
-	}
-
 	if err := u.repo.CreateTask(ctx, taskID, "image_gen", payload); err != nil {
 		return err
 	}
 
-	// 1. УЛУЧШЕНИЕ ПРОМПТА (Вызываем как обычный чат)
-	promptInput := fmt.Sprintf("Текст: %s\nПожелание: %s", chapterText, userWish)
+	// Достаем данные из JSON-пейлоада
+	var input struct {
+		Content string `json:"content"`
+		Prompt  string `json:"prompt"`
+	}
+	_ = json.Unmarshal([]byte(payload), &input)
+
+	// 1. УЛУЧШЕНИЕ ПРОМПТА
+	promptInput := fmt.Sprintf("Текст: %s\nПожелание: %s", input.Content, input.Prompt)
 	enhancedPrompt, err := u.gigachat.SendChat(imagePromptEnhancer, promptInput)
 	if err != nil {
-		u.repo.UpdateTaskResult(ctx, taskID, "failed", nil)
-		return err
+		return u.publishResult(ctx, taskID, "failed", nil, err.Error())
 	}
 
 	log.Printf("Сгенерирован промпт для художника: %s", enhancedPrompt)
 
-	// 2. ГЕНЕРАЦИЯ КАРТИНКИ (Вызывает text2image через function_call: "auto")
+	// 2. ГЕНЕРАЦИЯ КАРТИНКИ
 	fileID, err := u.gigachat.GenerateImage(enhancedPrompt)
 	if err != nil {
-		u.repo.UpdateTaskResult(ctx, taskID, "failed", map[string]string{"error": "image gen failed"})
-		return err
+		return u.publishResult(ctx, taskID, "failed", nil, "image gen failed")
 	}
 
 	// 3. Скачиваем картинку
 	imgData, err := u.gigachat.DownloadFile(fileID)
 	if err != nil {
-		u.repo.UpdateTaskResult(ctx, taskID, "failed", map[string]string{"error": "download failed"})
-		return err
+		return u.publishResult(ctx, taskID, "failed", nil, "download failed")
 	}
 
 	// 4. Сохраняем в MinIO
-	fileName := fmt.Sprintf("%s.jpg", taskID.String()) // Сбер отдает в JPG
+	fileName := fmt.Sprintf("%s.jpg", taskID.String())
 	fileURL, err := u.storage.Upload(ctx, fileName, bytes.NewReader(imgData), int64(len(imgData)), "image/jpeg")
 	if err != nil {
-		u.repo.UpdateTaskResult(ctx, taskID, "failed", map[string]string{"error": "minio upload failed"})
-		return err
+		return u.publishResult(ctx, taskID, "failed", nil, "minio upload failed")
 	}
 
 	result := models.ImageResult{
 		URL:    fileURL,
-		Prompt: enhancedPrompt, // Сохраняем промпт, чтобы юзер видел, как ИИ его понял
+		Prompt: enhancedPrompt,
 	}
 
-	return u.repo.UpdateTaskResult(ctx, taskID, "completed", result)
+	return u.publishResult(ctx, taskID, "completed", result, "")
 }
 
-// extractJSON находит и извлекает JSON объект из строки, даже если он окружен мусором
 func extractJSON(raw string) string {
 	start := strings.Index(raw, "{")
 	end := strings.LastIndex(raw, "}")
 	if start == -1 || end == -1 || end < start {
-		return "" // Не удалось найти валидный JSON
+		return ""
 	}
 	return raw[start : end+1]
 }

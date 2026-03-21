@@ -20,4 +20,5 @@ COPY --from=builder /app/migrations ./migrations
 COPY .env . 
 
 EXPOSE 8080
+COPY migrations ./migrations
 CMD ["./core-app"]

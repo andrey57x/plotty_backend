@@ -2,46 +2,28 @@ package usecase
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/fivecode/plotty/core/ai/repository"
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
 	"github.com/fivecode/plotty/core/constants"
-	"github.com/fivecode/plotty/core/ml"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
+	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Usecase struct {
 	jobs     *repository.Repository
 	chapters *chapterrepo.Repository
-	ml       *ml.Client
+	rmqChan  *amqp.Channel
 }
 
-func New(jobs *repository.Repository, chapters *chapterrepo.Repository, mlc *ml.Client) *Usecase {
-	return &Usecase{jobs: jobs, chapters: chapters, ml: mlc}
-}
-
-func imageURLForDB(binaryOrURL string) (string, error) {
-	s := strings.TrimSpace(binaryOrURL)
-	if s == "" {
-		return "", fmt.Errorf("empty image payload")
-	}
-	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
-		return s, nil
-	}
-	if strings.HasPrefix(s, "data:") {
-		return s, nil
-	}
-	if _, err := base64.StdEncoding.DecodeString(s); err != nil {
-		return "", fmt.Errorf("image must be URL, data URL, or raw base64: %w", err)
-	}
-	return "data:image/png;base64," + s, nil
+func New(jobs *repository.Repository, chapters *chapterrepo.Repository, rmqChan *amqp.Channel) *Usecase {
+	return &Usecase{jobs: jobs, chapters: chapters, rmqChan: rmqChan}
 }
 
 type spellcheckInput struct {
@@ -64,44 +46,37 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, cont
 	if text == "" {
 		return uuid.Nil, named_errors.ErrInvalidInput
 	}
-	payload, _ := json.Marshal(spellcheckInput{ChapterID: chapterID.String(), Content: text})
+
+	payloadBytes, _ := json.Marshal(spellcheckInput{ChapterID: chapterID.String(), Content: text})
 	jobID := uuid.New()
 	now := time.Now().UTC()
+
 	job := models.AIJob{
 		ID:           jobID,
 		Type:         constants.AIJobTypeSpellcheck,
-		Status:       constants.AIJobStatusQueued,
+		Status:       constants.AIJobStatusProcessing,
 		ChapterID:    &ch.ID,
 		StoryID:      &ch.StoryID,
-		InputPayload: payload,
+		InputPayload: payloadBytes,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
 	if err := u.jobs.CreateJob(ctx, job); err != nil {
 		return uuid.Nil, err
 	}
-	go u.runSpellcheckJob(jobID, text)
+
+	task := rabbitmq.MLTaskMessage{
+		TaskID:  jobID.String(),
+		Type:    "spellcheck",
+		Payload: string(payloadBytes),
+	}
+	body, _ := json.Marshal(task)
+	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
+
 	return jobID, nil
-}
-
-func (u *Usecase) runSpellcheckJob(jobID uuid.UUID, text string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusProcessing, nil, nil)
-
-	res, err := u.ml.Spellcheck(ctx, text)
-	if err != nil {
-		msg := err.Error()
-		_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusFailed, nil, &msg)
-		return
-	}
-	raw, err := json.Marshal(res)
-	if err != nil {
-		msg := err.Error()
-		_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusFailed, nil, &msg)
-		return
-	}
-	_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusCompleted, raw, nil)
 }
 
 func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID, content, prompt string) (uuid.UUID, error) {
@@ -113,85 +88,82 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID,
 	if prompt == "" {
 		return uuid.Nil, named_errors.ErrInvalidInput
 	}
-	payload, _ := json.Marshal(imageGenInput{
+
+	payloadBytes, _ := json.Marshal(imageGenInput{
 		ChapterID: chapterID.String(),
 		Content:   content,
 		Prompt:    prompt,
 	})
 	jobID := uuid.New()
 	now := time.Now().UTC()
+
 	job := models.AIJob{
 		ID:           jobID,
 		Type:         constants.AIJobTypeImageGeneration,
-		Status:       constants.AIJobStatusQueued,
+		Status:       constants.AIJobStatusProcessing,
 		ChapterID:    &ch.ID,
 		StoryID:      &ch.StoryID,
-		InputPayload: payload,
+		InputPayload: payloadBytes,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
 	if err := u.jobs.CreateJob(ctx, job); err != nil {
 		return uuid.Nil, err
 	}
-	go u.runImageJob(jobID, ch.ID, content, prompt)
+
+	task := rabbitmq.MLTaskMessage{
+		TaskID:  jobID.String(),
+		Type:    "image_gen",
+		Payload: string(payloadBytes),
+	}
+	body, _ := json.Marshal(task)
+	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
+
 	return jobID, nil
 }
 
-func (u *Usecase) runImageJob(jobID, chapterID uuid.UUID, content, prompt string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusProcessing, nil, nil)
-
-	gen, err := u.ml.GenerateImage(ctx, content, prompt)
+func (u *Usecase) ProcessMLResult(ctx context.Context, res rabbitmq.MLResultMessage) error {
+	taskID, err := uuid.Parse(res.TaskID)
 	if err != nil {
-		msg := err.Error()
-		_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusFailed, nil, &msg)
-		return
+		return err
 	}
 
-	type imgRow struct {
-		ID       string `json:"id"`
-		ImageURL string `json:"imageUrl"`
-		Prompt   string `json:"prompt"`
-	}
-	var apiImages []imgRow
-	for _, im := range gen.Images {
-		imgID := uuid.New()
-		url, serr := imageURLForDB(im.BinaryOrURL)
-		if serr != nil {
-			msg := serr.Error()
-			_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusFailed, nil, &msg)
-			return
-		}
-		p := im.Prompt
-		if p == "" {
-			p = prompt
-		}
-		chPtr := chapterID
-		gimg := models.GeneratedImage{
-			ID:        imgID,
-			JobID:     jobID,
-			ChapterID: &chPtr,
-			Prompt:    p,
-			ImageURL:  url,
-			CreatedAt: time.Now().UTC(),
-		}
-		if err := u.jobs.InsertGeneratedImage(ctx, gimg); err != nil {
-			msg := err.Error()
-			_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusFailed, nil, &msg)
-			return
-		}
-		apiImages = append(apiImages, imgRow{ID: imgID.String(), ImageURL: url, Prompt: p})
-	}
-
-	result := map[string]any{"images": apiImages}
-	raw, err := json.Marshal(result)
+	job, err := u.jobs.GetJob(ctx, taskID)
 	if err != nil {
-		msg := err.Error()
-		_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusFailed, nil, &msg)
-		return
+		return err
 	}
-	_ = u.jobs.UpdateJob(ctx, jobID, constants.AIJobStatusCompleted, raw, nil)
+
+	var errMsg *string
+	if res.Error != "" {
+		errMsg = &res.Error
+	}
+
+	if err := u.jobs.UpdateJob(ctx, taskID, res.Status, res.Result, errMsg); err != nil {
+		return err
+	}
+
+	if res.Status == constants.AIJobStatusCompleted && job.Type == constants.AIJobTypeImageGeneration {
+		var imgRes struct {
+			URL    string `json:"url"`
+			Prompt string `json:"prompt"`
+		}
+		if err := json.Unmarshal(res.Result, &imgRes); err == nil {
+			gimg := models.GeneratedImage{
+				ID:        uuid.New(),
+				JobID:     taskID,
+				ChapterID: job.ChapterID,
+				Prompt:    imgRes.Prompt,
+				ImageURL:  imgRes.URL,
+				CreatedAt: time.Now().UTC(),
+			}
+			_ = u.jobs.InsertGeneratedImage(ctx, gimg)
+		}
+	}
+
+	return nil
 }
 
 func (u *Usecase) GetJobView(ctx context.Context, jobID uuid.UUID) (map[string]any, error) {

@@ -13,6 +13,6 @@ FROM alpine:latest
 WORKDIR /root/
 COPY --from=builder /ml-worker .
 COPY .env . 
+COPY migrations ./migrations
 
-# Воркеру не нужен EXPOSE, так как он сам идет в Redis, а не ждет запросов
 CMD ["./ml-worker"]

@@ -7,22 +7,16 @@ import (
 
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	// Импортируем общую структуру сообщений
+	sharedrmq "github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 )
 
 const TaskQueueName = "ml_tasks_queue"
 
-// Входящее сообщение от Core API
-type MLTaskMessage struct {
-	TaskID  string `json:"task_id"`
-	Type    string `json:"type"` // "spellcheck" или "image_gen"
-	Payload string `json:"payload"`
-}
-
-// MLUsecase определяет интерфейс, который ожидает наш consumer.
-// Теперь он принимает taskID в формате uuid.UUID
 type MLUsecase interface {
-	ProcessSpellcheck(ctx context.Context, taskID uuid.UUID, text string) error
-	ProcessImageGen(ctx context.Context, taskID uuid.UUID, text string) error
+	ProcessSpellcheck(ctx context.Context, taskID uuid.UUID, payload string) error
+	ProcessImageGen(ctx context.Context, taskID uuid.UUID, payload string) error
 }
 
 type Consumer struct {
@@ -37,7 +31,6 @@ func NewConsumer(conn *amqp.Connection, uc MLUsecase) (*Consumer, error) {
 		return nil, err
 	}
 
-	// Объявляем очередь. Если ее нет, она создастся.
 	_, err = ch.QueueDeclare(
 		TaskQueueName,
 		true,  // durable
@@ -57,16 +50,15 @@ func NewConsumer(conn *amqp.Connection, uc MLUsecase) (*Consumer, error) {
 	}, nil
 }
 
-// Start начинает слушать очередь в бесконечном цикле
 func (c *Consumer) Start(ctx context.Context) error {
 	msgs, err := c.channel.Consume(
 		TaskQueueName,
-		"ml_worker", // consumer name
-		false,       // auto-ack (отправляем подтверждение вручную)
-		false,       // exclusive
-		false,       // no-local
-		false,       // no-wait
-		nil,         // args
+		"ml_worker",
+		false, // auto-ack отключен, отправляем руками
+		false,
+		false,
+		false,
+		nil,
 	)
 	if err != nil {
 		return err
@@ -81,51 +73,47 @@ func (c *Consumer) Start(ctx context.Context) error {
 			return nil
 		case msg, ok := <-msgs:
 			if !ok {
-				return nil // Канал закрыт
+				return nil
 			}
 
-			// 1. Парсим сообщение
-			var task MLTaskMessage
+			// Парсим в ОБЩУЮ структуру
+			var task sharedrmq.MLTaskMessage
 			if err := json.Unmarshal(msg.Body, &task); err != nil {
-				log.Printf("Ошибка парсинга JSON сообщения: %v. Сообщение отклонено.", err)
+				log.Printf("Ошибка парсинга JSON: %v", err)
 				msg.Nack(false, false)
 				continue
 			}
 
-			// 2. Валидируем и конвертируем UUID
 			taskID, err := uuid.Parse(task.TaskID)
 			if err != nil {
-				log.Printf("Невалидный UUID в сообщении: %s. Сообщение отклонено.", task.TaskID)
+				log.Printf("Невалидный UUID: %s", task.TaskID)
 				msg.Nack(false, false)
 				continue
 			}
 
 			log.Printf("Получена задача [%s]: %s", task.Type, taskID)
 
-			// 3. Вызываем соответствующий метод Usecase
 			var processErr error
 			switch task.Type {
 			case "spellcheck":
 				processErr = c.usecase.ProcessSpellcheck(ctx, taskID, task.Payload)
-			case "image_gen":
+			case "image_gen": // Имя совпадает с тем, что отправляет core
 				processErr = c.usecase.ProcessImageGen(ctx, taskID, task.Payload)
 			default:
-				log.Printf("Неизвестный тип задачи: %s. Сообщение отклонено.", task.Type)
+				log.Printf("Неизвестный тип задачи: %s", task.Type)
 			}
 
-			// 4. Отправляем подтверждение (ACK) или отклонение (NACK)
 			if processErr != nil {
-				log.Printf("Ошибка обработки задачи %s: %v", taskID, processErr)
-				msg.Nack(false, false)
+				log.Printf("Ошибка обработки %s: %v", taskID, processErr)
+				msg.Nack(false, false) // Nack, чтобы сообщение ушло в drop или dead-letter
 			} else {
-				log.Printf("Задача %s успешно выполнена!", taskID)
-				msg.Ack(false)
+				log.Printf("Задача %s выполнена успешно", taskID)
+				msg.Ack(false) // Подтверждаем RabbitMQ
 			}
 		}
 	}
 }
 
-// Close закрывает канал
 func (c *Consumer) Close() {
 	if c.channel != nil {
 		c.channel.Close()

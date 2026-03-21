@@ -36,7 +36,7 @@ func (d *Delivery) Spellcheck(w http.ResponseWriter, r *http.Request) {
 	}
 	utilities.WriteJSON(w, http.StatusOK, map[string]any{
 		"jobId":  jobID.String(),
-		"status": constants.AIJobStatusQueued,
+		"status": constants.AIJobStatusProcessing,
 	})
 }
 
@@ -59,7 +59,7 @@ func (d *Delivery) ImageGeneration(w http.ResponseWriter, r *http.Request) {
 	}
 	utilities.WriteJSON(w, http.StatusOK, map[string]any{
 		"jobId":  jobID.String(),
-		"status": constants.AIJobStatusQueued,
+		"status": constants.AIJobStatusProcessing,
 	})
 }
 

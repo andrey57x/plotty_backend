@@ -8,7 +8,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/fivecode/plotty/internal/infrastructure/gigachat"
-	"github.com/fivecode/plotty/internal/infrastructure/minio"
+	storage "github.com/fivecode/plotty/internal/infrastructure/minio"
 	"github.com/fivecode/plotty/ml/config"
 	"github.com/fivecode/plotty/ml/internal/delivery/rabbitmq"
 	"github.com/fivecode/plotty/ml/internal/repository"
@@ -18,6 +18,7 @@ import (
 type App struct {
 	cfg      *config.Config
 	rmqConn  *amqp.Connection
+	rmqChan  *amqp.Channel // Добавлено хранение канала
 	dbPool   *pgxpool.Pool
 	storage  *storage.MinioStorage
 	consumer *rabbitmq.Consumer
@@ -38,13 +39,23 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 		return nil, err
 	}
 
-	// 3. Инициализируем Repository (работа с базой)
+	// 3. Создаем канал для публикации результатов из ML обратно в Core
+	rmqChan, err := rmqConn.Channel()
+	if err != nil {
+		return nil, err
+	}
+
+	// На всякий случай декларируем очередь результатов (если ML поднимется раньше Core)
+	_, err = rmqChan.QueueDeclare("ml_results_queue", true, false, false, false, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Инициализируем Repository и Usecase (ПЕРЕДАЕМ КАНАЛ 4-М АРГУМЕНТОМ!)
 	repo := repository.NewPostgresRepository(dbPool)
+	uc := usecase.NewAIUsecase(repo, gcClient, st, rmqChan)
 
-	// 4. Инициализируем Usecase (бизнес-логика)
-	uc := usecase.NewAIUsecase(repo, gcClient, st)
-
-	// 5. Инициализируем Consumer (транспорт)
+	// 5. Инициализируем Consumer (транспорт приема задач)
 	consumer, err := rabbitmq.NewConsumer(rmqConn, uc)
 	if err != nil {
 		return nil, err
@@ -53,6 +64,7 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 	return &App{
 		cfg:      cfg,
 		rmqConn:  rmqConn,
+		rmqChan:  rmqChan,
 		dbPool:   dbPool,
 		storage:  st,
 		consumer: consumer,
@@ -69,6 +81,9 @@ func (a *App) Stop() {
 	log.Println("Очистка ресурсов ML сервиса...")
 	if a.consumer != nil {
 		a.consumer.Close()
+	}
+	if a.rmqChan != nil {
+		a.rmqChan.Close()
 	}
 	if a.rmqConn != nil {
 		a.rmqConn.Close()

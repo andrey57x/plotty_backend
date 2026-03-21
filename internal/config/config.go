@@ -22,6 +22,8 @@ type Config struct {
 	RedisPassword string `mapstructure:"REDIS_PASSWORD"`
 
 	MLBaseURL string `mapstructure:"ML_BASE_URL"`
+
+	RabbitMQURL   string `mapstructure:"RABBITMQ_URL"`
 }
 
 func Load() (*Config, error) {
