@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT}:6379"
+
+  core-api:
+    build:
+      context: ..
+      dockerfile: deploy/core.Dockerfile
+    ports:
+      - "${HTTP_PORT}:8080"
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - ../.env
+
+  ml-worker:
+    build:
+      context: ..
+      dockerfile: deploy/ml.Dockerfile
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - ../.env
+
+volumes:
+  pgdata:
