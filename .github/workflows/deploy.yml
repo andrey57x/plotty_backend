@@ -42,7 +42,11 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      # ШАГ 1: Копируем файл
+      # ШАГ 0: СКАЧИВАЕМ КОД В ЭТОТ JOB
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ШАГ 1: Копируем файл на сервер
       - name: Copy docker-compose file via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -51,6 +55,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "deploy/docker-compose.prod.yml"
           target: "/home/ubuntu/plotty"
+          strip_components: 1
 
       # ШАГ 2: Запускаем
       - name: Deploy to VPS
@@ -60,18 +65,17 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            # Переходим в папку, где лежит скопированный файл
-            cd /home/ubuntu/plotty/deploy
+            cd /home/ubuntu/plotty
 
-            # Если файла .env нет в папке deploy, копируем его из родительской папки
-            # (так как мы создали его вручную в /home/ubuntu/plotty)
-            cp /home/ubuntu/plotty/.env .
-
+            # На всякий случай создаем файл для SSL, если его нет
             touch acme.json && chmod 600 acme.json
 
+            # Логинимся в GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+            # Скачиваем новые образы и запускаем
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
 
+            # Очищаем старые образы, чтобы сервер не забился
             docker image prune -f
