@@ -11,9 +11,9 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      # Настройка SSL через HTTP Challenge
-      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
       - "--certificatesresolvers.myresolver.acme.email=57andreys57@gmail.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
@@ -24,8 +24,6 @@ services:
       - "./acme.json:/letsencrypt/acme.json"
     networks:
       - plotty_net
-    labels:
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
     restart: always
 
   dozzle:
