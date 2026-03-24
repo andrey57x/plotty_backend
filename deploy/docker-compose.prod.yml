@@ -7,7 +7,7 @@ services:
   # TRAEFIK (Маршрутизатор и SSL)
   # ==========================================
   traefik:
-    image: traefik:v2.10
+    image: traefik:latest
     command:
       - "--api.insecure=false"
       - "--providers.docker=true"
