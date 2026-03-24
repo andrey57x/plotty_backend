@@ -115,7 +115,7 @@ services:
   # ПРИЛОЖЕНИЕ (БЭКЕНД И ФРОНТЕНД)
   # ==========================================
   core-api:
-    image: ghcr.io/YOUR_GITHUB_USERNAME/plotty-core:latest
+    image: ghcr.io/andrey57x/plotty-core:latest
     env_file:
       - .env
     labels:
@@ -129,7 +129,7 @@ services:
     restart: always
 
   ml-worker:
-    image: ghcr.io/YOUR_GITHUB_USERNAME/plotty-ml:latest
+    image: ghcr.io/andrey57x/plotty-ml:latest
     env_file:
       - .env
     networks:
@@ -137,7 +137,7 @@ services:
     restart: always
 
   frontend:
-    image: ghcr.io/YOUR_GITHUB_USERNAME/plotty-frontend:latest
+    image: ghcr.io/andrey57x/plotty-frontend:latest
     env_file:
       - .env
     labels:
