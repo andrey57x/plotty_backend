@@ -16,7 +16,9 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      # Меняем на httpchallenge — он надежнее
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.myresolver.acme.email=57andreys57@gmail.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
@@ -29,9 +31,6 @@ services:
       - plotty_net
     restart: always
 
-  # ==========================================
-  # DOZZLE (Просмотр логов в браузере)
-  # ==========================================
   dozzle:
     image: amir20/dozzle:latest
     volumes:
@@ -48,7 +47,7 @@ services:
     restart: always
 
   # ==========================================
-  # ИНФРАСТРУКТУРА (БД, Очереди)
+  # ИНФРАСТРУКТУРА
   # ==========================================
   core-db:
     image: postgres:15-alpine
@@ -87,7 +86,7 @@ services:
     restart: always
 
   # ==========================================
-  # MINIO (Хранилище картинок)
+  # MINIO (Исправленные лейблы)
   # ==========================================
   minio:
     image: minio/minio:latest
@@ -97,12 +96,16 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     labels:
       - "traefik.enable=true"
+      # API (S3)
       - "traefik.http.routers.minio-api.rule=Host(`s3.plotty-stories.duckdns.org`)"
       - "traefik.http.routers.minio-api.tls.certresolver=myresolver"
-      - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
+      - "traefik.http.routers.minio-api.service=minio-api-svc"
+      - "traefik.http.services.minio-api-svc.loadbalancer.server.port=9000"
+      # Console (Web UI)
       - "traefik.http.routers.minio-console.rule=Host(`minio.plotty-stories.duckdns.org`)"
       - "traefik.http.routers.minio-console.tls.certresolver=myresolver"
-      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
+      - "traefik.http.routers.minio-console.service=minio-console-svc"
+      - "traefik.http.services.minio-console-svc.loadbalancer.server.port=9001"
     volumes:
       - minio_data:/data
     networks:
@@ -125,7 +128,7 @@ services:
       - plotty_net
 
   # ==========================================
-  # ПРИЛОЖЕНИЕ (БЭКЕНД И ФРОНТЕНД)
+  # ПРИЛОЖЕНИЕ
   # ==========================================
   core-api:
     image: ghcr.io/andrey57x/plotty-core:latest
