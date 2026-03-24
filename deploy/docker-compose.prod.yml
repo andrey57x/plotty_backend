@@ -14,10 +14,8 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      # Редирект HTTP -> HTTPS
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      # Настройка SSL
       - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
       - "--certificatesresolvers.myresolver.acme.email=57andreys57@gmail.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
@@ -27,6 +25,24 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./acme.json:/letsencrypt/acme.json"
+    networks:
+      - plotty_net
+    restart: always
+
+  # ==========================================
+  # DOZZLE (Просмотр логов в браузере)
+  # ==========================================
+  dozzle:
+    image: amir20/dozzle:latest
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dozzle.rule=Host(`logs.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.dozzle.tls.certresolver=myresolver"
+      - "traefik.http.routers.dozzle.entrypoints=websecure"
+      - "traefik.http.routers.dozzle.middlewares=dozzle-auth"
+      - "traefik.http.middlewares.dozzle-auth.basicauth.users=admin1337:$$apr1$$uhAkkmOe$$rCwG9bKWUrlxzsXB5wk9E/"
     networks:
       - plotty_net
     restart: always
@@ -81,11 +97,9 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     labels:
       - "traefik.enable=true"
-      # API для фронта/бека (Картинки) - s3.plotty-stories.duckdns.org
       - "traefik.http.routers.minio-api.rule=Host(`s3.plotty-stories.duckdns.org`)"
       - "traefik.http.routers.minio-api.tls.certresolver=myresolver"
       - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
-      # Веб-панель MinIO - minio.plotty-stories.duckdns.org
       - "traefik.http.routers.minio-console.rule=Host(`minio.plotty-stories.duckdns.org`)"
       - "traefik.http.routers.minio-console.tls.certresolver=myresolver"
       - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
@@ -120,7 +134,6 @@ services:
       - .env
     labels:
       - "traefik.enable=true"
-      # Бэкенд будет доступен по api.plotty-stories.duckdns.org
       - "traefik.http.routers.core-api.rule=Host(`api.plotty-stories.duckdns.org`)"
       - "traefik.http.routers.core-api.tls.certresolver=myresolver"
       - "traefik.http.services.core-api.loadbalancer.server.port=8080"
@@ -142,7 +155,6 @@ services:
       - .env
     labels:
       - "traefik.enable=true"
-      # Основной сайт будет доступен по plotty-stories.duckdns.org
       - "traefik.http.routers.frontend.rule=Host(`plotty-stories.duckdns.org`)"
       - "traefik.http.routers.frontend.tls.certresolver=myresolver"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
