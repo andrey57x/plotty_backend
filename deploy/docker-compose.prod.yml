@@ -113,8 +113,7 @@ services:
     image: minio/mc
     depends_on:
       - minio
-    env_file:
-      - .env
+    env_file: .env
     entrypoint: >
       /bin/sh -c "
       until (/usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}); do echo 'Waiting for MinIO...'; sleep 1; done;
@@ -130,7 +129,7 @@ services:
   # ==========================================
   core-api:
     image: ghcr.io/andrey57x/plotty-core:latest
-    env_file:
+    env_file: .env
     volumes:
       - ./.env:/root/.env:ro
     labels:
@@ -144,8 +143,7 @@ services:
 
   ml-worker:
     image: ghcr.io/andrey57x/plotty-ml:latest
-    env_file:
-      - .env
+    env_file: .env
     volumes:
       - ./.env:/root/.env:ro
     networks:
@@ -154,8 +152,7 @@ services:
 
   frontend:
     image: ghcr.io/andrey57x/plotty-frontend:latest
-    env_file:
-      - .env
+    env_file: .env
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`plotty-stories.duckdns.org`)"
