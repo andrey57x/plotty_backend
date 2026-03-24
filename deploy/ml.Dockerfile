@@ -12,7 +12,6 @@ RUN go build -o /ml-worker ./cmd/ml/main.go
 FROM alpine:latest
 WORKDIR /root/
 COPY --from=builder /ml-worker .
-COPY .env . 
 COPY migrations ./migrations
 
 CMD ["./ml-worker"]

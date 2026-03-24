@@ -16,8 +16,6 @@ FROM alpine:latest
 WORKDIR /root/
 COPY --from=builder /core-app .
 COPY --from=builder /app/migrations ./migrations
-# Копируем .env из корня (он понадобится при запуске)
-COPY .env . 
 
 EXPOSE 8080
 COPY migrations ./migrations
