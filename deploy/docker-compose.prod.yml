@@ -131,7 +131,8 @@ services:
   core-api:
     image: ghcr.io/andrey57x/plotty-core:latest
     env_file:
-      - .env
+    volumes:
+      - ./.env:/root/.env:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.core-api.rule=Host(`api.plotty-stories.duckdns.org`)"
@@ -145,6 +146,8 @@ services:
     image: ghcr.io/andrey57x/plotty-ml:latest
     env_file:
       - .env
+    volumes:
+      - ./.env:/root/.env:ro
     networks:
       - plotty_net
     restart: always
