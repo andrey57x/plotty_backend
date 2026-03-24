@@ -33,7 +33,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dozzle.rule=Host(`logs.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.dozzle.rule=Host(`logs-plotty-stories.duckdns.org`)"
       - "traefik.http.routers.dozzle.entrypoints=websecure"
       - "traefik.http.routers.dozzle.tls.certresolver=myresolver"
       - "traefik.http.routers.dozzle.middlewares=dozzle-auth"
@@ -42,6 +42,7 @@ services:
       - plotty_net
     restart: always
 
+  # ... (БД, Redis, RabbitMQ без изменений) ...
   core-db:
     image: postgres:15-alpine
     environment:
@@ -86,12 +87,12 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.minio-api.rule=Host(`s3.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.minio-api.rule=Host(`s3-plotty-stories.duckdns.org`)"
       - "traefik.http.routers.minio-api.entrypoints=websecure"
       - "traefik.http.routers.minio-api.tls.certresolver=myresolver"
       - "traefik.http.routers.minio-api.service=minio-api-svc"
       - "traefik.http.services.minio-api-svc.loadbalancer.server.port=9000"
-      - "traefik.http.routers.minio-console.rule=Host(`minio.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.minio-console.rule=Host(`minio-plotty-stories.duckdns.org`)"
       - "traefik.http.routers.minio-console.entrypoints=websecure"
       - "traefik.http.routers.minio-console.tls.certresolver=myresolver"
       - "traefik.http.routers.minio-console.service=minio-console-svc"
@@ -124,7 +125,7 @@ services:
       - ./.env:/root/.env:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.core-api.rule=Host(`api.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.core-api.rule=Host(`api-plotty-stories.duckdns.org`)"
       - "traefik.http.routers.core-api.entrypoints=websecure"
       - "traefik.http.routers.core-api.tls.certresolver=myresolver"
       - "traefik.http.services.core-api.loadbalancer.server.port=8080"
