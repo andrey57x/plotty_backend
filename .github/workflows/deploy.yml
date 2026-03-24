@@ -77,5 +77,8 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
 
+            docker compose -f docker-compose.prod.yml pull core-api ml-worker
+            docker compose -f docker-compose.prod.yml up -d core-api ml-worker
+
             # Очищаем старые образы, чтобы сервер не забился
             docker image prune -f
