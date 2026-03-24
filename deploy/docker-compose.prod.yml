@@ -1,0 +1,156 @@
+networks:
+  plotty_net:
+    driver: bridge
+
+services:
+  # ==========================================
+  # TRAEFIK (Маршрутизатор и SSL)
+  # ==========================================
+  traefik:
+    image: traefik:v2.10
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Редирект HTTP -> HTTPS
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      # Настройка SSL
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=57andreys57@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./acme.json:/letsencrypt/acme.json"
+    networks:
+      - plotty_net
+    restart: always
+
+  # ==========================================
+  # ИНФРАСТРУКТУРА (БД, Очереди)
+  # ==========================================
+  core-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata_core:/var/lib/postgresql/data
+    networks:
+      - plotty_net
+    restart: always
+
+  ml-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${ML_DB_USER}
+      POSTGRES_PASSWORD: ${ML_DB_PASSWORD}
+      POSTGRES_DB: ${ML_DB_NAME}
+    volumes:
+      - pgdata_ml:/var/lib/postgresql/data
+    networks:
+      - plotty_net
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - plotty_net
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    networks:
+      - plotty_net
+    restart: always
+
+  # ==========================================
+  # MINIO (Хранилище картинок)
+  # ==========================================
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    labels:
+      - "traefik.enable=true"
+      # API для фронта/бека (Картинки) - s3.plotty-stories.duckdns.org
+      - "traefik.http.routers.minio-api.rule=Host(`s3.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.minio-api.tls.certresolver=myresolver"
+      - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
+      # Веб-панель MinIO - minio.plotty-stories.duckdns.org
+      - "traefik.http.routers.minio-console.rule=Host(`minio.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.minio-console.tls.certresolver=myresolver"
+      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - plotty_net
+    restart: always
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      - minio
+    env_file:
+      - .env
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}); do echo 'Waiting for MinIO...'; sleep 1; done;
+      /usr/bin/mc mb myminio/${MINIO_BUCKET_NAME} || true;
+      /usr/bin/mc anonymous set download myminio/${MINIO_BUCKET_NAME};
+      exit 0;
+      "
+    networks:
+      - plotty_net
+
+  # ==========================================
+  # ПРИЛОЖЕНИЕ (БЭКЕНД И ФРОНТЕНД)
+  # ==========================================
+  core-api:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/plotty-core:latest
+    env_file:
+      - .env
+    labels:
+      - "traefik.enable=true"
+      # Бэкенд будет доступен по api.plotty-stories.duckdns.org
+      - "traefik.http.routers.core-api.rule=Host(`api.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.core-api.tls.certresolver=myresolver"
+      - "traefik.http.services.core-api.loadbalancer.server.port=8080"
+    networks:
+      - plotty_net
+    restart: always
+
+  ml-worker:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/plotty-ml:latest
+    env_file:
+      - .env
+    networks:
+      - plotty_net
+    restart: always
+
+  frontend:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/plotty-frontend:latest
+    env_file:
+      - .env
+    labels:
+      - "traefik.enable=true"
+      # Основной сайт будет доступен по plotty-stories.duckdns.org
+      - "traefik.http.routers.frontend.rule=Host(`plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.frontend.tls.certresolver=myresolver"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+    networks:
+      - plotty_net
+    restart: always
+
+volumes:
+  pgdata_core:
+  pgdata_ml:
+  minio_data:
