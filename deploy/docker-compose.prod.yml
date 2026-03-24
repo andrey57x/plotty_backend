@@ -3,9 +3,6 @@ networks:
     driver: bridge
 
 services:
-  # ==========================================
-  # TRAEFIK (Маршрутизатор и SSL)
-  # ==========================================
   traefik:
     image: traefik:latest
     command:
@@ -14,8 +11,6 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.myresolver.acme.email=57andreys57@gmail.com"
@@ -28,6 +23,8 @@ services:
       - "./acme.json:/letsencrypt/acme.json"
     networks:
       - plotty_net
+    labels:
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
     restart: always
 
   dozzle:
@@ -37,17 +34,14 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dozzle.rule=Host(`logs.plotty-stories.duckdns.org`)"
-      - "traefik.http.routers.dozzle.tls.certresolver=myresolver"
       - "traefik.http.routers.dozzle.entrypoints=websecure"
+      - "traefik.http.routers.dozzle.tls.certresolver=myresolver"
       - "traefik.http.routers.dozzle.middlewares=dozzle-auth"
       - "traefik.http.middlewares.dozzle-auth.basicauth.users=admin1337:$$apr1$$uhAkkmOe$$rCwG9bKWUrlxzsXB5wk9E/"
     networks:
       - plotty_net
     restart: always
 
-  # ==========================================
-  # ИНФРАСТРУКТУРА
-  # ==========================================
   core-db:
     image: postgres:15-alpine
     environment:
@@ -84,9 +78,6 @@ services:
       - plotty_net
     restart: always
 
-  # ==========================================
-  # MINIO (Исправленные лейблы)
-  # ==========================================
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -95,13 +86,13 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     labels:
       - "traefik.enable=true"
-      # API (S3)
       - "traefik.http.routers.minio-api.rule=Host(`s3.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.minio-api.entrypoints=websecure"
       - "traefik.http.routers.minio-api.tls.certresolver=myresolver"
       - "traefik.http.routers.minio-api.service=minio-api-svc"
       - "traefik.http.services.minio-api-svc.loadbalancer.server.port=9000"
-      # Console (Web UI)
       - "traefik.http.routers.minio-console.rule=Host(`minio.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.minio-console.entrypoints=websecure"
       - "traefik.http.routers.minio-console.tls.certresolver=myresolver"
       - "traefik.http.routers.minio-console.service=minio-console-svc"
       - "traefik.http.services.minio-console-svc.loadbalancer.server.port=9001"
@@ -126,9 +117,6 @@ services:
     networks:
       - plotty_net
 
-  # ==========================================
-  # ПРИЛОЖЕНИЕ
-  # ==========================================
   core-api:
     image: ghcr.io/andrey57x/plotty-core:latest
     env_file: .env
@@ -137,6 +125,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.core-api.rule=Host(`api.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.core-api.entrypoints=websecure"
       - "traefik.http.routers.core-api.tls.certresolver=myresolver"
       - "traefik.http.services.core-api.loadbalancer.server.port=8080"
     networks:
@@ -158,6 +147,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=myresolver"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     networks:
