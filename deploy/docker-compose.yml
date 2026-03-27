@@ -1,33 +1,25 @@
 services:
   core-db:
     image: postgres:15-alpine
+    env_file: ../.env
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "${DB_PORT}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - "${DB_LOCAL_PORT}:5432"
     volumes:
       - pgdata_core:/var/lib/postgresql/data
 
   ml-db:
     image: postgres:15-alpine
+    env_file: ../.env
     environment:
       POSTGRES_USER: ${ML_DB_USER}
       POSTGRES_PASSWORD: ${ML_DB_PASSWORD}
       POSTGRES_DB: ${ML_DB_NAME}
     ports:
-      - "${ML_DB_PORT}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${ML_DB_USER} -d ${ML_DB_NAME}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - "${ML_DB_LOCAL_PORT}:5432"
     volumes:
       - pgdata_ml:/var/lib/postgresql/data
 
@@ -45,6 +37,7 @@ services:
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
+    env_file: ../.env
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -58,8 +51,7 @@ services:
     image: minio/mc
     depends_on:
       - minio
-    env_file:
-      - ../.env
+    env_file: ../.env
     entrypoint: >
       /bin/sh -c "
       until (/usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}); do echo 'Waiting for MinIO...'; sleep 1; done;
@@ -74,52 +66,51 @@ services:
       dockerfile: deploy/core.Dockerfile
     ports:
       - "${HTTP_PORT}:8080"
+    env_file: ../.env
     environment:
       DB_HOST: core-db
       DB_PORT: 5432
       REDIS_HOST: redis
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    volumes:
+      - ../.env:/root/.env:ro
     depends_on:
-      core-db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      rabbitmq:
-        condition: service_started
-    env_file:
-      - ../.env
+      - core-db
+      - redis
+      - rabbitmq
 
   ml-worker:
     build:
       context: ..
       dockerfile: deploy/ml.Dockerfile
+    env_file: ../.env
     environment:
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       ML_DB_HOST: ml-db
+      ML_DB_PORT: 5432
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       MINIO_ENDPOINT: minio:9000
-      MINIO_PUBLIC_URL: http://${MINIO_PUBLIC_IP}:${MINIO_PORT}
+    volumes:
+      - ../.env:/root/.env:ro
     depends_on:
-      ml-db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_started
-      minio-init:
-        condition: service_completed_successfully
-    env_file:
-      - ../.env
+      - ml-db
+      - rabbitmq
+      - minio-init
 
   frontend:
-    build:
-      context: ../../plotty_frontend
-      dockerfile: ../plotty_backend/deploy/frontend.Dockerfile
-      args:
-        - BACKEND_URL=http://${MINIO_PUBLIC_IP}:8080
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
     ports:
-      - "80:3000"
+      - "3000:3000"
+    volumes:
+      - ../../plotty_frontend:/app
+      - /app/node_modules
+      - /app/.next
+    env_file: ../.env
     environment:
-      - BACKEND_URL=http://core-api:8080
-      - NEXT_PUBLIC_API_URL=http://${MINIO_PUBLIC_IP}:8080
-    restart: always
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_API_MOCKING: ${NEXT_PUBLIC_API_MOCKING}
+      HOST: 0.0.0.0
     depends_on:
       - core-api
 

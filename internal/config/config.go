@@ -10,6 +10,8 @@ import (
 type Config struct {
 	HTTPPort string `mapstructure:"HTTP_PORT"`
 
+	AllowedOrigins string `mapstructure:"ALLOWED_ORIGINS"`
+
 	DBHost     string `mapstructure:"DB_HOST"`
 	DBPort     string `mapstructure:"DB_PORT"`
 	DBUser     string `mapstructure:"DB_USER"`

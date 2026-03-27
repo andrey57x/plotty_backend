@@ -80,12 +80,12 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, rmqChan *amqp.Channel) ht
 	r.HandleFunc("/ai/image-generation", ad.ImageGeneration).Methods(http.MethodPost)
 	r.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
 
-	return corsMiddleware(r)
+	return corsMiddleware(r, cfg.AllowedOrigins)
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
+func corsMiddleware(next http.Handler, allowedOrigin string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "https://plotty-stories.duckdns.org")
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
