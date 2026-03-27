@@ -25,7 +25,9 @@ type Config struct {
 
 	MLBaseURL string `mapstructure:"ML_BASE_URL"`
 
-	RabbitMQURL   string `mapstructure:"RABBITMQ_URL"`
+	RabbitMQURL string `mapstructure:"RABBITMQ_URL"`
+
+	SessionDurationDays int `mapstructure:"SESSION_DURATION_DAYS"`
 }
 
 func Load() (*Config, error) {
@@ -44,6 +46,10 @@ func Load() (*Config, error) {
 
 	if cfg.HTTPPort == "" {
 		cfg.HTTPPort = "8080"
+	}
+
+	if cfg.SessionDurationDays == 0 {
+		cfg.SessionDurationDays = 30
 	}
 
 	return &cfg, nil
