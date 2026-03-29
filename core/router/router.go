@@ -23,7 +23,7 @@ import (
 	tagdeliv "github.com/fivecode/plotty/core/tag/delivery"
 	tagrepo "github.com/fivecode/plotty/core/tag/repository"
 	taguc "github.com/fivecode/plotty/core/tag/usecase"
-	"github.com/fivecode/plotty/internal/config"
+	"github.com/fivecode/plotty/core/config"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"

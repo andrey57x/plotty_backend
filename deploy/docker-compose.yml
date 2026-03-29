@@ -59,6 +59,11 @@ services:
       /usr/bin/mc anonymous set download myminio/${MINIO_BUCKET_NAME};
       exit 0;
       "
+  
+  languagetool:
+    image: silviof/docker-languagetool:latest
+    ports:
+      - "${LANGUAGETOOL_LOCAL_PORT}:8010"
 
   core-api:
     build:

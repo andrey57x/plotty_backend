@@ -71,7 +71,7 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, cont
 		Payload: string(payloadBytes),
 	}
 	body, _ := json.Marshal(task)
-	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+	_ = u.rmqChan.PublishWithContext(ctx, "", "spellcheck_queue", false, false, amqp.Publishing{
 		ContentType: "application/json",
 		Body:        body,
 	})

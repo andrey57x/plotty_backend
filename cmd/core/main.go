@@ -7,8 +7,8 @@ import (
 	"github.com/fivecode/plotty/core/app"
 	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/redis"
-	"github.com/fivecode/plotty/internal/config"
-	"github.com/fivecode/plotty/internal/infrastructure"
+	"github.com/fivecode/plotty/core/config"
+	"github.com/fivecode/plotty/internal/infrastructure/postgres"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/rs/zerolog/log"
 )
@@ -36,13 +36,14 @@ func main() {
 	defer rmqChan.Close()
 
 	rmqChan.QueueDeclare("ml_tasks_queue", true, false, false, false, nil)
+	rmqChan.QueueDeclare("spellcheck_queue", true, false, false, false, nil)
 	rmqChan.QueueDeclare("ml_results_queue", true, false, false, false, nil)
 
-	if err := infrastructure.RunMigrations(cfg.GetDSN(), "migrations"); err != nil {
+	if err := postgres.RunMigrations(cfg.GetDSN(), "migrations"); err != nil {
 		log.Fatal().Err(err).Msg("failed to run migrations")
 	}
 
-	pool, err := infrastructure.NewPostgresPool(ctx, cfg.GetDSN())
+	pool, err := postgres.NewPostgresPool(ctx, cfg.GetDSN())
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to postgres")
 	}

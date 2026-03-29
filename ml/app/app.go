@@ -4,31 +4,33 @@ import (
 	"context"
 	"log"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	amqp "github.com/rabbitmq/amqp091-go"
-
 	"github.com/fivecode/plotty/internal/infrastructure/gigachat"
+	"github.com/fivecode/plotty/internal/infrastructure/languagetool"
 	storage "github.com/fivecode/plotty/internal/infrastructure/minio"
 	"github.com/fivecode/plotty/ml/config"
+	"github.com/fivecode/plotty/ml/internal/adapters"
 	"github.com/fivecode/plotty/ml/internal/delivery/rabbitmq"
 	"github.com/fivecode/plotty/ml/internal/repository"
 	"github.com/fivecode/plotty/ml/internal/usecase"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type App struct {
 	cfg      *config.Config
 	rmqConn  *amqp.Connection
-	rmqChan  *amqp.Channel // Добавлено хранение канала
+	rmqChan  *amqp.Channel
 	dbPool   *pgxpool.Pool
 	storage  *storage.MinioStorage
+	usecase  *usecase.AIUsecase
 	consumer *rabbitmq.Consumer
 }
 
 func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) (*App, error) {
-	// 1. Инициализируем GigaChat клиент
 	gcClient := gigachat.NewClient(cfg.GigaChatAuthKey)
+	ltClient := languagetool.NewClient(cfg.LanguageToolURL)
 
-	// 2. Инициализируем MinIO клиент
 	st, err := storage.NewMinioStorage(
 		cfg.MinioEndpoint,
 		cfg.MinioUser,
@@ -40,24 +42,20 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 		return nil, err
 	}
 
-	// 3. Создаем канал для публикации результатов из ML обратно в Core
+	ltAdapter := adapters.NewLanguageToolAdapter(ltClient)
+
 	rmqChan, err := rmqConn.Channel()
 	if err != nil {
 		return nil, err
 	}
-
-	// На всякий случай декларируем очередь результатов (если ML поднимется раньше Core)
-	_, err = rmqChan.QueueDeclare("ml_results_queue", true, false, false, false, nil)
-	if err != nil {
+	if _, err := rmqChan.QueueDeclare("ml_results_queue", true, false, false, false, nil); err != nil {
 		return nil, err
 	}
 
-	// 4. Инициализируем Repository и Usecase (ПЕРЕДАЕМ КАНАЛ 4-М АРГУМЕНТОМ!)
 	repo := repository.NewPostgresRepository(dbPool)
-	uc := usecase.NewAIUsecase(repo, gcClient, st, rmqChan)
+	uc := usecase.NewAIUsecase(repo, ltAdapter, gcClient, st, rmqChan)
 
-	// 5. Инициализируем Consumer (транспорт приема задач)
-	consumer, err := rabbitmq.NewConsumer(rmqConn, uc)
+	consumer, err := rabbitmq.NewConsumer(rmqConn)
 	if err != nil {
 		return nil, err
 	}
@@ -69,17 +67,30 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 		dbPool:   dbPool,
 		storage:  st,
 		consumer: consumer,
+		usecase:  uc,
 	}, nil
 }
 
-// Run запускает воркер и блокирует выполнение
 func (a *App) Run(ctx context.Context) error {
-	return a.consumer.Start(ctx)
+	err1 := a.consumer.StartWorker(ctx, "spellcheck_queue", func(c context.Context, id uuid.UUID, tType string, payload string) error {
+		return a.usecase.ProcessSpellcheck(c, id, payload)
+	})
+	if err1 != nil {
+		return err1
+	}
+
+	err2 := a.consumer.StartWorker(ctx, "ml_tasks_queue", a.usecase.ProcessMLTask)
+	if err2 != nil {
+		return err2
+	}
+
+	<-ctx.Done()
+	log.Println("ML Worker: Контекст отменен, завершение работы...")
+	return ctx.Err()
 }
 
-// Stop красиво завершает все соединения
 func (a *App) Stop() {
-	log.Println("Очистка ресурсов ML сервиса...")
+	log.Println("ML Worker: Очистка ресурсов...")
 	if a.consumer != nil {
 		a.consumer.Close()
 	}
@@ -92,4 +103,5 @@ func (a *App) Stop() {
 	if a.dbPool != nil {
 		a.dbPool.Close()
 	}
+	log.Println("ML Worker: Ресурсы очищены.")
 }

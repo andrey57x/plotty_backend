@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/fivecode/plotty/internal/infrastructure"
+	"github.com/fivecode/plotty/internal/infrastructure/postgres"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/fivecode/plotty/ml/app"
 	"github.com/fivecode/plotty/ml/config"
@@ -20,7 +20,7 @@ func main() {
 		log.Fatalf("Ошибка загрузки конфига: %v", err)
 	}
 
-	if err := infrastructure.RunMigrations(cfg.GetDSN(), "migrations/ml"); err != nil {
+	if err := postgres.RunMigrations(cfg.GetDSN(), "migrations/ml"); err != nil {
 		log.Fatalf("migrations error: %v", err)
 	}
 
@@ -29,7 +29,7 @@ func main() {
 		log.Fatalf("Ошибка подключения к RabbitMQ: %v", err)
 	}
 
-	dbPool, err := infrastructure.NewPostgresPool(ctx, cfg.GetDSN())
+	dbPool, err := postgres.NewPostgresPool(ctx, cfg.GetDSN())
 	if err != nil {
 		log.Fatalf("Ошибка БД: %v", err)
 	}

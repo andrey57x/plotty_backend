@@ -5,7 +5,7 @@ import (
 
 	"github.com/fivecode/plotty/core/router"
 	"github.com/fivecode/plotty/core/redis"
-	"github.com/fivecode/plotty/internal/config"
+	"github.com/fivecode/plotty/core/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 )

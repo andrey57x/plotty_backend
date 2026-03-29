@@ -10,8 +10,8 @@ import (
 type Config struct {
 	RabbitMQURL     string `mapstructure:"RABBITMQ_URL"`
 	GigaChatAuthKey string `mapstructure:"GIGACHAT_AUTH_KEY"`
+	LanguageToolURL string `mapstructure:"LANGUAGETOOL_URL"`
 	
-	// Добавляем эти поля:
 	DBHost     string `mapstructure:"ML_DB_HOST"`
 	DBPort     string `mapstructure:"ML_DB_PORT"`
 	DBUser     string `mapstructure:"ML_DB_USER"`
@@ -19,16 +19,15 @@ type Config struct {
 	DBName     string `mapstructure:"ML_DB_NAME"`
 
 	MinioEndpoint   string `mapstructure:"MINIO_ENDPOINT"`
-	MinioPublicURL  string `mapstructure:"MINIO_PUBLIC_URL"` // публичный URL для ссылок на объекты, напр. http://host:9000
+	MinioPublicURL  string `mapstructure:"MINIO_PUBLIC_URL"`
 	MinioUser       string `mapstructure:"MINIO_ROOT_USER"`
 	MinioPassword   string `mapstructure:"MINIO_ROOT_PASSWORD"`
 	MinioBucket     string `mapstructure:"MINIO_BUCKET_NAME"`
 }
 
-// Добавь метод получения DSN (как в core)
 func (c *Config) GetDSN() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		c.DBUser, c.DBPassword, c.DBHost, "5432", c.DBName) // Внутри докера порт всегда 5432
+		c.DBUser, c.DBPassword, c.DBHost, "5432", c.DBName)
 }
 
 func Load() (*Config, error) {
