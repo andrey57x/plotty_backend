@@ -83,21 +83,25 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	api.HandleFunc("/session", authd.GetSession).Methods(http.MethodGet)
 
 	api.HandleFunc("/stories", sd.List).Methods(http.MethodGet)
-	api.HandleFunc("/stories", sd.Create).Methods(http.MethodPost)
-	api.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Patch).Methods(http.MethodPatch)
-	api.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Delete).Methods(http.MethodDelete)
-	api.HandleFunc("/stories/{storyId:"+uuidRe+"}/chapters", cd.CreateUnderStory).Methods(http.MethodPost)
 	api.HandleFunc("/stories/{slug}", sd.GetBySlug).Methods(http.MethodGet)
 
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Get).Methods(http.MethodGet)
-	api.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Patch).Methods(http.MethodPatch)
-	api.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Delete).Methods(http.MethodDelete)
 
 	api.HandleFunc("/tags", td.List).Methods(http.MethodGet)
 
 	api.HandleFunc("/ai/spellcheck", ad.Spellcheck).Methods(http.MethodPost)
 	api.HandleFunc("/ai/image-generation", ad.ImageGeneration).Methods(http.MethodPost)
 	api.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
+
+	protected := api.NewRoute().Subrouter()
+	protected.Use(middleware.AuthMiddleware(redisDB))
+
+	protected.HandleFunc("/stories", sd.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Patch).Methods(http.MethodPatch)
+	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Delete).Methods(http.MethodDelete)
+	protected.HandleFunc("/stories/{storyId:"+uuidRe+"}/chapters", cd.CreateUnderStory).Methods(http.MethodPost)
+	protected.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Patch).Methods(http.MethodPatch)
+	protected.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Delete).Methods(http.MethodDelete)
 
 	return middleware.CORS(r)
 }
