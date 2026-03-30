@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/fivecode/plotty/core/models"
@@ -141,21 +142,92 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *Repository) ListIDs(ctx context.Context, q string, tagSlugs []string, limit, offset int) ([]uuid.UUID, error) {
-	tagCount := len(tagSlugs)
+func dedupeStrings(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func (r *Repository) groupTagSlugsByCategory(ctx context.Context, tagSlugs []string) (map[string][]string, int, error) {
+	tagSlugs = dedupeStrings(tagSlugs)
+	if len(tagSlugs) == 0 {
+		return map[string][]string{}, 0, nil
+	}
+
+	type row struct {
+		category string
+		slug     string
+	}
 	rows, err := r.pool.Query(ctx, `
+		SELECT category, slug
+		FROM tags
+		WHERE slug = ANY($1::text[])
+	`, tagSlugs)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	out := make(map[string][]string)
+	found := 0
+	for rows.Next() {
+		var rr row
+		if err := rows.Scan(&rr.category, &rr.slug); err != nil {
+			return nil, 0, err
+		}
+		out[rr.category] = append(out[rr.category], rr.slug)
+		found++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return out, found, nil
+}
+
+func (r *Repository) ListIDs(ctx context.Context, q string, tagSlugs []string, limit, offset int) ([]uuid.UUID, error) {
+	tagSlugs = dedupeStrings(tagSlugs)
+	groups, found, err := r.groupTagSlugsByCategory(ctx, tagSlugs)
+	if err != nil {
+		return nil, err
+	}
+	if len(tagSlugs) > 0 && found != len(tagSlugs) {
+		return []uuid.UUID{}, nil
+	}
+
+	args := []any{q, limit, offset}
+	whereTags := ""
+	if len(groups) > 0 {
+		i := 0
+		for _, slugs := range groups {
+			i++
+			args = append(args, slugs)
+			ph := len(args)
+			whereTags += fmt.Sprintf(`
+				AND EXISTS (
+					SELECT 1
+					FROM story_tags st
+					JOIN tags tg ON tg.id = st.tag_id
+					WHERE st.story_id = s.id AND tg.slug = ANY($%d::text[])
+				)
+			`, ph)
+		}
+	}
+
+	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
 		SELECT s.id
 		FROM stories s
-		WHERE ($3::int = 0 OR (
-			SELECT COUNT(DISTINCT tg.slug)::int
-			FROM story_tags st
-			JOIN tags tg ON tg.id = st.tag_id
-			WHERE st.story_id = s.id AND tg.slug = ANY($4::text[])
-		) = $3)
-		AND ($1 = '' OR s.title ILIKE '%' || $1 || '%')
+		WHERE ($1 = '' OR s.title ILIKE '%%' || $1 || '%%')
+		%s
 		ORDER BY s.updated_at DESC
-		LIMIT $2 OFFSET $5
-	`, q, limit, tagCount, tagSlugs, offset)
+		LIMIT $2 OFFSET $3
+	`, whereTags), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,19 +244,39 @@ func (r *Repository) ListIDs(ctx context.Context, q string, tagSlugs []string, l
 }
 
 func (r *Repository) CountList(ctx context.Context, q string, tagSlugs []string) (int, error) {
-	tagCount := len(tagSlugs)
+	tagSlugs = dedupeStrings(tagSlugs)
+	groups, found, err := r.groupTagSlugsByCategory(ctx, tagSlugs)
+	if err != nil {
+		return 0, err
+	}
+	if len(tagSlugs) > 0 && found != len(tagSlugs) {
+		return 0, nil
+	}
+
+	args := []any{q}
+	whereTags := ""
+	if len(groups) > 0 {
+		for _, slugs := range groups {
+			args = append(args, slugs)
+			ph := len(args)
+			whereTags += fmt.Sprintf(`
+				AND EXISTS (
+					SELECT 1
+					FROM story_tags st
+					JOIN tags tg ON tg.id = st.tag_id
+					WHERE st.story_id = s.id AND tg.slug = ANY($%d::text[])
+				)
+			`, ph)
+		}
+	}
+
 	var total int
-	err := r.pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COUNT(*)::int
 		FROM stories s
-		WHERE ($2::int = 0 OR (
-			SELECT COUNT(DISTINCT tg.slug)::int
-			FROM story_tags st
-			JOIN tags tg ON tg.id = st.tag_id
-			WHERE st.story_id = s.id AND tg.slug = ANY($3::text[])
-		) = $2)
-		AND ($1 = '' OR s.title ILIKE '%' || $1 || '%')
-	`, q, tagCount, tagSlugs).Scan(&total)
+		WHERE ($1 = '' OR s.title ILIKE '%%' || $1 || '%%')
+		%s
+	`, whereTags), args...).Scan(&total)
 	return total, err
 }
 
