@@ -94,6 +94,23 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (r *Repository) GetLatestImageURL(ctx context.Context, chapterID uuid.UUID) (*string, error) {
+	var url string
+	err := r.pool.QueryRow(ctx, `
+		SELECT image_url FROM generated_images
+		WHERE chapter_id = $1
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, chapterID).Scan(&url)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &url, nil
+}
+
 func (r *Repository) ListBriefByStory(ctx context.Context, storyID uuid.UUID) ([]models.ChapterBrief, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, title, updated_at

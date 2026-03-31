@@ -49,8 +49,21 @@ func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, conte
 	return u.chapters.Update(ctx, id, title, content)
 }
 
-func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*models.Chapter, error) {
-	return u.chapters.GetByID(ctx, id)
+type ChapterWithImage struct {
+	models.Chapter
+	ImageURL *string
+}
+
+func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*ChapterWithImage, error) {
+	ch, err := u.chapters.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	imgURL, err := u.chapters.GetLatestImageURL(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ChapterWithImage{Chapter: *ch, ImageURL: imgURL}, nil
 }
 
 func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {

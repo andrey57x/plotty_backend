@@ -71,6 +71,7 @@ type chapterGetResponse struct {
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
 	UpdatedAt string    `json:"updatedAt"`
+	ImageURL  *string   `json:"imageUrl,omitempty"`
 }
 
 func (d *Delivery) Get(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +91,7 @@ func (d *Delivery) Get(w http.ResponseWriter, r *http.Request) {
 		Title:     ch.Title,
 		Content:   ch.Content,
 		UpdatedAt: ch.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		ImageURL:  ch.ImageURL,
 	})
 }
 
