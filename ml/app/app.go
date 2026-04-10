@@ -7,12 +7,12 @@ import (
 	"github.com/fivecode/plotty/internal/infrastructure/gigachat"
 	"github.com/fivecode/plotty/internal/infrastructure/languagetool"
 	storage "github.com/fivecode/plotty/internal/infrastructure/minio"
+	sharedrmq "github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/fivecode/plotty/ml/config"
 	"github.com/fivecode/plotty/ml/internal/adapters"
 	"github.com/fivecode/plotty/ml/internal/delivery/rabbitmq"
 	"github.com/fivecode/plotty/ml/internal/repository"
 	"github.com/fivecode/plotty/ml/internal/usecase"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -72,14 +72,14 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 }
 
 func (a *App) Run(ctx context.Context) error {
-	err1 := a.consumer.StartWorker(ctx, "spellcheck_queue", func(c context.Context, id uuid.UUID, tType string, payload string) error {
-		return a.usecase.ProcessSpellcheck(c, id, payload)
-	})
+	err1 := a.consumer.StartWorker(ctx, "spellcheck_queue", rabbitmq.LoggingMiddleware(func(c context.Context, task sharedrmq.MLTaskMessage) error {
+		return a.usecase.ProcessSpellcheck(c, task)
+	}))
 	if err1 != nil {
 		return err1
 	}
 
-	err2 := a.consumer.StartWorker(ctx, "ml_tasks_queue", a.usecase.ProcessMLTask)
+	err2 := a.consumer.StartWorker(ctx, "ml_tasks_queue", rabbitmq.LoggingMiddleware(a.usecase.ProcessMLTask))
 	if err2 != nil {
 		return err2
 	}

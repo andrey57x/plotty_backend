@@ -15,15 +15,15 @@ import (
 	chdeliv "github.com/fivecode/plotty/core/chapter/delivery"
 	chrepo "github.com/fivecode/plotty/core/chapter/repository"
 	chuc "github.com/fivecode/plotty/core/chapter/usecase"
+	"github.com/fivecode/plotty/core/config"
 	"github.com/fivecode/plotty/core/middleware"
+	"github.com/fivecode/plotty/core/redis"
 	storydeliv "github.com/fivecode/plotty/core/story/delivery"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
 	storyuc "github.com/fivecode/plotty/core/story/usecase"
-	"github.com/fivecode/plotty/core/redis"
 	tagdeliv "github.com/fivecode/plotty/core/tag/delivery"
 	tagrepo "github.com/fivecode/plotty/core/tag/repository"
 	taguc "github.com/fivecode/plotty/core/tag/usecase"
-	"github.com/fivecode/plotty/core/config"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,8 +41,8 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 
 	tu := taguc.New(tr)
 	su := storyuc.New(sr, tr, cr)
-	cu := chuc.New(cr, sr)
-	au := aiuc.New(ar, cr, rmqChan)
+	cu := chuc.New(cr, sr, rmqChan)
+	au := aiuc.New(ar, cr, sr, rmqChan)
 	authu := authuc.New(authr)
 
 	sessionDuration := time.Duration(cfg.SessionDurationDays) * 24 * time.Hour
@@ -91,6 +91,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 
 	api.HandleFunc("/ai/spellcheck", ad.Spellcheck).Methods(http.MethodPost)
 	api.HandleFunc("/ai/image-generation", ad.ImageGeneration).Methods(http.MethodPost)
+	api.HandleFunc("/ai/logic-check", ad.LogicCheck).Methods(http.MethodPost)
 	api.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
 
 	protected := api.NewRoute().Subrouter()
@@ -98,6 +99,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 
 	protected.HandleFunc("/stories", sd.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Patch).Methods(http.MethodPatch)
+	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/publish", cd.Publish).Methods(http.MethodPost)
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Delete).Methods(http.MethodDelete)
 	protected.HandleFunc("/stories/{storyId:"+uuidRe+"}/chapters", cd.CreateUnderStory).Methods(http.MethodPost)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Patch).Methods(http.MethodPatch)

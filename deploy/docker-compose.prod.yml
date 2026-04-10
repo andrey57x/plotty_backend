@@ -115,7 +115,7 @@ services:
       "
     networks:
       - plotty_net
-  
+
   languagetool:
     image: silviof/docker-languagetool:latest
     networks:
@@ -158,6 +158,18 @@ services:
     networks:
       - plotty_net
     restart: always
+
+  # adminer:
+  #   image: adminer
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.adminer.rule=Host(`db.plotty-stories.duckdns.org`)"
+  #     - "traefik.http.routers.adminer.entrypoints=websecure"
+  #     - "traefik.http.routers.adminer.tls.certresolver=myresolver"
+  #     - "traefik.http.routers.adminer.middlewares=dozzle-auth"
+  #   networks:
+  #     - plotty_net
+  #   restart: always
 
 volumes:
   pgdata_core:

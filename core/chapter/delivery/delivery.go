@@ -107,3 +107,21 @@ func (d *Delivery) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (d *Delivery) Publish(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid chapter id")
+		return
+	}
+
+	// Опционально: здесь должна быть проверка на то, что текущий юзер — автор истории. 
+	// Но пока просто вызываем UseCase.
+
+	if err := d.uc.Publish(r.Context(), id); err != nil {
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, map[string]string{"status": "published"})
+}

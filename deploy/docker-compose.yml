@@ -59,7 +59,7 @@ services:
       /usr/bin/mc anonymous set download myminio/${MINIO_BUCKET_NAME};
       exit 0;
       "
-  
+
   languagetool:
     image: silviof/docker-languagetool:latest
     ports:
@@ -116,8 +116,17 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       NEXT_PUBLIC_API_MOCKING: ${NEXT_PUBLIC_API_MOCKING}
       HOST: 0.0.0.0
+      BACKEND_URL: ${BACKEND_URL}
     depends_on:
       - core-api
+
+  adminer:
+    image: adminer
+    ports:
+      - "${ADMINER_LOCAL_PORT}:8080"
+    depends_on:
+      - core-db
+      - ml-db
 
 volumes:
   pgdata_core:

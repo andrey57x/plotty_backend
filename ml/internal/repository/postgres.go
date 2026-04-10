@@ -3,16 +3,21 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type MLRepository interface {
 	CreateTask(ctx context.Context, id uuid.UUID, taskType, payload string) error
 	UpdateTaskResult(ctx context.Context, taskID uuid.UUID, status string, result interface{}) error
+	GetLorebook(ctx context.Context, storyID uuid.UUID) (string, error)
+	UpsertLorebook(ctx context.Context, storyID, chapterID uuid.UUID, entities string) error
+	UpdateSummary(ctx context.Context, storyID uuid.UUID, summary string) error
 }
 
 type postgresRepo struct {
@@ -54,7 +59,41 @@ func (r *postgresRepo) UpdateTaskResult(ctx context.Context, taskID uuid.UUID, s
 	`
 	_, err = r.db.Exec(ctx, query, status, jsonData, time.Now(), taskID)
 	if err != nil {
-		return fmt.Errorf("ошибка выполнения обновления задачи: %w", err)
+		return fmt.Errorf("ошибка обновления задачи: %w", err)
 	}
 	return nil
+}
+
+func (r *postgresRepo) GetLorebook(ctx context.Context, storyID uuid.UUID) (string, error) {
+	var entities string
+	err := r.db.QueryRow(ctx, "SELECT entities::text FROM story_lorebooks WHERE story_id = $1", storyID).Scan(&entities)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "{}", nil
+		}
+		return "", err
+	}
+	return entities, nil
+}
+
+func (r *postgresRepo) UpsertLorebook(ctx context.Context, storyID, chapterID uuid.UUID, entities string) error {
+	query := `
+		INSERT INTO story_lorebooks (story_id, entities, last_processed_chapter_id, updated_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (story_id) DO UPDATE 
+		SET entities = $2, last_processed_chapter_id = $3, updated_at = $4
+	`
+	_, err := r.db.Exec(ctx, query, storyID, entities, chapterID, time.Now())
+	return err
+}
+
+func (r *postgresRepo) UpdateSummary(ctx context.Context, storyID uuid.UUID, summary string) error {
+	query := `
+		INSERT INTO story_lorebooks (story_id, summary, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (story_id) DO UPDATE 
+		SET summary = $2, updated_at = $3
+	`
+	_, err := r.db.Exec(ctx, query, storyID, summary, time.Now())
+	return err
 }

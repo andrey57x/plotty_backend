@@ -2,22 +2,27 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
+	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
 )
 
 type Usecase struct {
 	chapters *chapterrepo.Repository
 	stories  *storyrepo.Repository
+	rmqChan  *amqp.Channel
 }
 
-func New(chapters *chapterrepo.Repository, stories *storyrepo.Repository) *Usecase {
-	return &Usecase{chapters: chapters, stories: stories}
+func New(chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel) *Usecase {
+	return &Usecase{chapters: chapters, stories: stories, rmqChan: rmqChan}
 }
 
 func (u *Usecase) Create(ctx context.Context, storyID uuid.UUID, title, content string) (*models.Chapter, error) {
@@ -68,4 +73,71 @@ func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*ChapterWithImage, err
 
 func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
 	return u.chapters.Delete(ctx, id)
+}
+
+func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
+	ch, err := u.chapters.GetByID(ctx, chapterID)
+	if err != nil {
+		return err
+	}
+
+	if ch.Status == "published" {
+		return nil // Уже опубликовано
+	}
+
+	// 1. Публикуем главу
+	if err := u.chapters.Publish(ctx, chapterID); err != nil {
+		return err
+	}
+
+	// 2. Публикуем историю (состояние обновится, если она была в draft)
+	_ = u.stories.Publish(ctx, ch.StoryID)
+
+	// 3. Отправляем задачу в ML: "Извлечь лор (Story State)"
+	loreTask := rabbitmq.MLTaskMessage{
+		TaskID:  uuid.NewString(),
+		TraceID: uuid.NewString(), // В будущем можно брать из логгера
+		Type:    "extract_lore",
+		Payload: ch.Content,
+		Metadata: map[string]string{
+			"story_id":   ch.StoryID.String(),
+			"chapter_id": chapterID.String(),
+		},
+	}
+	u.publishToRabbitMQ(ctx, loreTask)
+
+	// 4. Логика генерации Summary:
+	briefs, _ := u.chapters.ListBriefByStory(ctx, ch.StoryID)
+	publishedCount := 0
+	for _, b := range briefs {
+		if b.Status == "published" {
+			publishedCount++
+		}
+	}
+
+	if publishedCount == 1 {
+		summaryTask := rabbitmq.MLTaskMessage{
+			TaskID:  uuid.NewString(),
+			TraceID: uuid.NewString(),
+			Type:    "generate_summary",
+			Payload: ch.Content,
+			Metadata: map[string]string{
+				"story_id": ch.StoryID.String(),
+			},
+		}
+		u.publishToRabbitMQ(ctx, summaryTask)
+	}
+
+	return nil
+}
+
+func (u *Usecase) publishToRabbitMQ(ctx context.Context, task rabbitmq.MLTaskMessage) {
+	body, _ := json.Marshal(task)
+	err := u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("task_type", task.Type).Msg("failed to publish ML task")
+	}
 }

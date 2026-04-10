@@ -23,10 +23,10 @@ func New(pool *pgxpool.Pool) *Repository {
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*models.Chapter, error) {
 	var c models.Chapter
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, story_id, title, content, created_at, updated_at
+		SELECT id, story_id, title, content, status, created_at, updated_at
 		FROM chapters WHERE id = $1
 	`, id).Scan(
-		&c.ID, &c.StoryID, &c.Title, &c.Content, &c.CreatedAt, &c.UpdatedAt,
+		&c.ID, &c.StoryID, &c.Title, &c.Content, &c.Status, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, named_errors.ErrNotFound
@@ -41,14 +41,14 @@ func (r *Repository) Create(ctx context.Context, storyID uuid.UUID, title, conte
 	id := uuid.New()
 	now := time.Now().UTC()
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO chapters (id, story_id, title, content, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, id, storyID, title, content, now, now)
+		INSERT INTO chapters (id, story_id, title, content, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, id, storyID, title, content, "draft", now, now) // По умолчанию draft
 	if err != nil {
 		return nil, err
 	}
 	return &models.Chapter{
-		ID: id, StoryID: storyID, Title: title, Content: content,
+		ID: id, StoryID: storyID, Title: title, Content: content, Status: "draft",
 		CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
@@ -113,7 +113,7 @@ func (r *Repository) GetLatestImageURL(ctx context.Context, chapterID uuid.UUID)
 
 func (r *Repository) ListBriefByStory(ctx context.Context, storyID uuid.UUID) ([]models.ChapterBrief, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, title, updated_at
+		SELECT id, title, status, updated_at
 		FROM chapters WHERE story_id = $1
 		ORDER BY created_at ASC, id ASC
 	`, storyID)
@@ -124,10 +124,21 @@ func (r *Repository) ListBriefByStory(ctx context.Context, storyID uuid.UUID) ([
 	var out []models.ChapterBrief
 	for rows.Next() {
 		var b models.ChapterBrief
-		if err := rows.Scan(&b.ID, &b.Title, &b.UpdatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.Title, &b.Status, &b.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, b)
 	}
 	return out, rows.Err()
+}
+
+func (r *Repository) Publish(ctx context.Context, id uuid.UUID) error {
+	cmd, err := r.pool.Exec(ctx, `UPDATE chapters SET status = 'published', updated_at = $2 WHERE id = $1`, id, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return named_errors.ErrNotFound
+	}
+	return nil
 }

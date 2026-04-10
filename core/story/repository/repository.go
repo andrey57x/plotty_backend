@@ -31,9 +31,9 @@ func (r *Repository) Create(ctx context.Context, s models.Story, tagIDs []uuid.U
 
 	now := time.Now().UTC()
 	_, err = tx.Exec(ctx, `
-		INSERT INTO stories (id, slug, title, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, s.ID, s.Slug, s.Title, now, now)
+		INSERT INTO stories (id, slug, title, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, s.ID, s.Slug, s.Title, "draft", now, now)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -52,6 +52,7 @@ func (r *Repository) Create(ctx context.Context, s models.Story, tagIDs []uuid.U
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	s.Status = "draft"
 	s.CreatedAt = now
 	s.UpdatedAt = now
 	return &s, nil
@@ -104,9 +105,9 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, title *string, ta
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*models.Story, error) {
 	var s models.Story
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, slug, title, created_at, updated_at
+		SELECT id, slug, title, status, ai_summary, created_at, updated_at
 		FROM stories WHERE id = $1
-	`, id).Scan(&s.ID, &s.Slug, &s.Title, &s.CreatedAt, &s.UpdatedAt)
+	`, id).Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, named_errors.ErrNotFound
 	}
@@ -119,9 +120,9 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*models.Story, 
 func (r *Repository) GetBySlug(ctx context.Context, slug string) (*models.Story, error) {
 	var s models.Story
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, slug, title, created_at, updated_at
+		SELECT id, slug, title, status, ai_summary, created_at, updated_at
 		FROM stories WHERE slug = $1
-	`, slug).Scan(&s.ID, &s.Slug, &s.Title, &s.CreatedAt, &s.UpdatedAt)
+	`, slug).Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, named_errors.ErrNotFound
 	}
@@ -285,7 +286,7 @@ func (r *Repository) LoadStoriesByIDs(ctx context.Context, ids []uuid.UUID) (map
 		return map[uuid.UUID]models.Story{}, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, slug, title, created_at, updated_at
+		SELECT id, slug, title, status, ai_summary, created_at, updated_at
 		FROM stories WHERE id = ANY($1)
 	`, ids)
 	if err != nil {
@@ -295,7 +296,7 @@ func (r *Repository) LoadStoriesByIDs(ctx context.Context, ids []uuid.UUID) (map
 	m := make(map[uuid.UUID]models.Story, len(ids))
 	for rows.Next() {
 		var s models.Story
-		if err := rows.Scan(&s.ID, &s.Slug, &s.Title, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
 		m[s.ID] = s
@@ -359,4 +360,17 @@ func (r *Repository) TagsForStory(ctx context.Context, storyID uuid.UUID) ([]mod
 		return nil, err
 	}
 	return m[storyID], nil
+}
+
+func (r *Repository) Publish(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `UPDATE stories SET status = 'published', updated_at = $2 WHERE id = $1 AND status = 'draft'`, id, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *Repository) UpdateAISummary(ctx context.Context, storyID uuid.UUID, summary string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE stories SET ai_summary = $2 WHERE id = $1`, storyID, summary)
+	return err
 }

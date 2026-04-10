@@ -76,3 +76,20 @@ func (d *Delivery) GetJob(w http.ResponseWriter, r *http.Request) {
 	}
 	utilities.WriteJSON(w, http.StatusOK, out)
 }
+
+func (d *Delivery) LogicCheck(w http.ResponseWriter, r *http.Request) {
+	var body spellcheckBody
+	if err := utilities.DecodeJSON(r, &body); err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	jobID, err := d.uc.StartLogicCheck(r.Context(), body.ChapterID, body.Content)
+	if err != nil {
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+	utilities.WriteJSON(w, http.StatusOK, map[string]any{
+		"jobId":  jobID.String(),
+		"status": constants.AIJobStatusProcessing,
+	})
+}

@@ -17,6 +17,8 @@ type Story struct {
 	ID        uuid.UUID `json:"id"`
 	Slug      string    `json:"slug"`
 	Title     string    `json:"title"`
+	Status    string    `json:"status"`
+	AiSummary *string   `json:"aiHint,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -36,6 +38,7 @@ type StoryDetail struct {
 type ChapterBrief struct {
 	ID        uuid.UUID `json:"id"`
 	Title     string    `json:"title"`
+	Status    string    `json:"status"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
@@ -44,6 +47,7 @@ type Chapter struct {
 	StoryID   uuid.UUID `json:"storyId"`
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
+	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

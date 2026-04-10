@@ -1,0 +1,1 @@
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS ai_summary TEXT;

@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/fivecode/plotty/core/constants"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
+	storyrepo "github.com/fivecode/plotty/core/story/repository"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -19,11 +21,12 @@ import (
 type Usecase struct {
 	jobs     *repository.Repository
 	chapters *chapterrepo.Repository
+	stories  *storyrepo.Repository
 	rmqChan  *amqp.Channel
 }
 
-func New(jobs *repository.Repository, chapters *chapterrepo.Repository, rmqChan *amqp.Channel) *Usecase {
-	return &Usecase{jobs: jobs, chapters: chapters, rmqChan: rmqChan}
+func New(jobs *repository.Repository, chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel) *Usecase {
+	return &Usecase{jobs: jobs, chapters: chapters, stories: stories, rmqChan: rmqChan}
 }
 
 type spellcheckInput struct {
@@ -126,6 +129,29 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID,
 }
 
 func (u *Usecase) ProcessMLResult(ctx context.Context, res rabbitmq.MLResultMessage) error {
+	if res.Type == "generate_summary" && res.Status == "completed" {
+		storyIDStr, ok := res.Metadata["story_id"]
+		if !ok {
+			return errors.New("story_id missing in summary metadata")
+		}
+		storyID, err := uuid.Parse(storyIDStr)
+		if err != nil {
+			return err
+		}
+
+		var summaryData map[string]string
+		if err := json.Unmarshal(res.Result, &summaryData); err == nil {
+			if summaryText, ok := summaryData["summary"]; ok {
+				return u.stories.UpdateAISummary(ctx, storyID, summaryText)
+			}
+		}
+		return nil
+	}
+
+	if res.Type == "extract_lore" {
+		return nil
+	}
+
 	taskID, err := uuid.Parse(res.TaskID)
 	if err != nil {
 		return err
@@ -137,8 +163,9 @@ func (u *Usecase) ProcessMLResult(ctx context.Context, res rabbitmq.MLResultMess
 	}
 
 	var errMsg *string
-	if res.Error != "" {
-		errMsg = &res.Error
+	if res.Error != nil {
+		msg := res.Error.Message
+		errMsg = &msg
 	}
 
 	if err := u.jobs.UpdateJob(ctx, taskID, res.Status, res.Result, errMsg); err != nil {
@@ -203,4 +230,49 @@ func (u *Usecase) GetJobView(ctx context.Context, jobID uuid.UUID) (map[string]a
 		}
 	}
 	return out, nil
+}
+
+func (u *Usecase) StartLogicCheck(ctx context.Context, chapterID uuid.UUID, content string) (uuid.UUID, error) {
+	ch, err := u.chapters.GetByID(ctx, chapterID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	text := strings.TrimSpace(content)
+	if text == "" {
+		return uuid.Nil, named_errors.ErrInvalidInput
+	}
+
+	jobID := uuid.New()
+	now := time.Now().UTC()
+
+	job := models.AIJob{
+		ID:           jobID,
+		Type:         constants.AIJobTypeLogicCheck,
+		Status:       constants.AIJobStatusProcessing,
+		ChapterID:    &ch.ID,
+		StoryID:      &ch.StoryID,
+		InputPayload: []byte(`{"chapterId":"` + chapterID.String() + `"}`),
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := u.jobs.CreateJob(ctx, job); err != nil {
+		return uuid.Nil, err
+	}
+
+	task := rabbitmq.MLTaskMessage{
+		TaskID:  jobID.String(),
+		TraceID: uuid.NewString(),
+		Type:    "logic_check",
+		Payload: text,
+		Metadata: map[string]string{
+			"story_id": ch.StoryID.String(),
+		},
+	}
+	body, _ := json.Marshal(task)
+	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
+
+	return jobID, nil
 }
