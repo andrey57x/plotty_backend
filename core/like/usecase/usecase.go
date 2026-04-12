@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/fivecode/plotty/core/logger"
 	likerepo "github.com/fivecode/plotty/core/like/repository"
 	"github.com/fivecode/plotty/core/middleware"
 	"github.com/fivecode/plotty/core/named_errors"
@@ -22,7 +24,11 @@ func (u *Usecase) Like(ctx context.Context, storyID uuid.UUID) error {
 	if !ok {
 		return named_errors.ErrNoAccess
 	}
-	return u.likes.Like(ctx, userID, storyID)
+	if err := u.likes.Like(ctx, userID, storyID); err != nil {
+		return fmt.Errorf("like_uc.Like: %w", err)
+	}
+	logger.Ctx(ctx).Info().Uint64("user_id", userID).Stringer("story_id", storyID).Msg("like_uc: liked")
+	return nil
 }
 
 func (u *Usecase) Unlike(ctx context.Context, storyID uuid.UUID) error {
@@ -30,13 +36,17 @@ func (u *Usecase) Unlike(ctx context.Context, storyID uuid.UUID) error {
 	if !ok {
 		return named_errors.ErrNoAccess
 	}
-	return u.likes.Unlike(ctx, userID, storyID)
+	if err := u.likes.Unlike(ctx, userID, storyID); err != nil {
+		return fmt.Errorf("like_uc.Unlike: %w", err)
+	}
+	logger.Ctx(ctx).Info().Uint64("user_id", userID).Stringer("story_id", storyID).Msg("like_uc: unliked")
+	return nil
 }
 
 func (u *Usecase) Status(ctx context.Context, storyID uuid.UUID) (int, bool, error) {
 	count, err := u.likes.Count(ctx, storyID)
 	if err != nil {
-		return 0, false, err
+		return 0, false, fmt.Errorf("like_uc.Status count: %w", err)
 	}
 	var liked bool
 	if userID, ok := middleware.GetUserID(ctx); ok {

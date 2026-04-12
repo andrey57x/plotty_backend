@@ -32,3 +32,8 @@ func FromContext(ctx context.Context) zerolog.Logger {
 	}
 	return logger
 }
+
+func Ctx(ctx context.Context) *zerolog.Logger {
+	l := FromContext(ctx)
+	return &l
+}

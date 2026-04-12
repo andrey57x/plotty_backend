@@ -31,19 +31,33 @@ func New(pool *pgxpool.Pool, redisDB *redis.RedisDB) *AuthRepository {
 func (r *AuthRepository) CreateSession(ctx context.Context, userID uint64) (string, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Msg("creating session via redis store")
-	return r.Redis.CreateSession(ctx, userID, 30*24*time.Hour)
+	sid, err := r.Redis.CreateSession(ctx, userID, 30*24*time.Hour)
+	if err != nil {
+		log.Error().Err(err).Uint64("user_id", userID).Msg("auth_repo: create session failed")
+		return "", fmt.Errorf("auth_repo.CreateSession: %w", err)
+	}
+	return sid, nil
 }
 
 func (r *AuthRepository) DeleteSession(ctx context.Context, sessionID string) error {
 	log := logger.FromContext(ctx)
 	log.Info().Str("session_id", sessionID).Msg("deleting session via redis store")
-	return r.Redis.DeleteSession(ctx, sessionID)
+	if err := r.Redis.DeleteSession(ctx, sessionID); err != nil {
+		log.Error().Err(err).Str("session_id", sessionID).Msg("auth_repo: delete session failed")
+		return fmt.Errorf("auth_repo.DeleteSession: %w", err)
+	}
+	return nil
 }
 
 func (r *AuthRepository) GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Str("session_id", sessionID).Msg("getting user id by session via redis store")
-	return r.Redis.GetUserIDBySession(ctx, sessionID)
+	uid, err := r.Redis.GetUserIDBySession(ctx, sessionID)
+	if err != nil {
+		log.Warn().Err(err).Str("session_id", sessionID).Msg("auth_repo: get user by session failed")
+		return 0, fmt.Errorf("auth_repo.GetUserIDBySession: %w", err)
+	}
+	return uid, nil
 }
 
 func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
@@ -161,7 +175,8 @@ func (r *AuthRepository) UpdateUser(ctx context.Context, userID uint64, username
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
 			return nil, namederrors.ErrConflict
 		}
-		return nil, fmt.Errorf("failed to update user: %w", err)
+		log.Error().Err(err).Uint64("user_id", userID).Msg("auth_repo: update user failed")
+		return nil, fmt.Errorf("auth_repo.UpdateUser: %w", err)
 	}
 
 	return r.GetUserByID(ctx, userID)

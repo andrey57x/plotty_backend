@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	chapteruc "github.com/fivecode/plotty/core/chapter/usecase"
+	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/utilities"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -23,6 +24,8 @@ type createChapterBody struct {
 }
 
 func (d *Delivery) CreateUnderStory(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	storyID, err := uuid.Parse(mux.Vars(r)["storyId"])
 	if err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid storyId")
@@ -30,14 +33,17 @@ func (d *Delivery) CreateUnderStory(w http.ResponseWriter, r *http.Request) {
 	}
 	var body createChapterBody
 	if err := utilities.DecodeJSON(r, &body); err != nil {
+		log.Warn().Err(err).Stringer("story_id", storyID).Msg("chapter_delivery: create invalid json")
 		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 	ch, err := d.uc.Create(r.Context(), storyID, body.Title, body.Content)
 	if err != nil {
+		log.Warn().Err(err).Stringer("story_id", storyID).Msg("chapter_delivery: create failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
+	log.Info().Stringer("chapter_id", ch.ID).Msg("chapter_delivery: created")
 	utilities.WriteJSON(w, http.StatusCreated, ch)
 }
 
@@ -47,6 +53,8 @@ type patchChapterBody struct {
 }
 
 func (d *Delivery) Patch(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	id, err := uuid.Parse(mux.Vars(r)["id"])
 	if err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
@@ -54,11 +62,13 @@ func (d *Delivery) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 	var body patchChapterBody
 	if err := utilities.DecodeJSON(r, &body); err != nil {
+		log.Warn().Err(err).Stringer("chapter_id", id).Msg("chapter_delivery: patch invalid json")
 		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 	ch, err := d.uc.Update(r.Context(), id, body.Title, body.Content)
 	if err != nil {
+		log.Warn().Err(err).Stringer("chapter_id", id).Msg("chapter_delivery: patch failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
@@ -75,6 +85,8 @@ type chapterGetResponse struct {
 }
 
 func (d *Delivery) Get(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	id, err := uuid.Parse(mux.Vars(r)["id"])
 	if err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
@@ -82,6 +94,7 @@ func (d *Delivery) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	ch, err := d.uc.Get(r.Context(), id)
 	if err != nil {
+		log.Warn().Err(err).Stringer("chapter_id", id).Msg("chapter_delivery: get failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
@@ -96,29 +109,35 @@ func (d *Delivery) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Delivery) Delete(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	id, err := uuid.Parse(mux.Vars(r)["id"])
 	if err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 	if err := d.uc.Delete(r.Context(), id); err != nil {
+		log.Warn().Err(err).Stringer("chapter_id", id).Msg("chapter_delivery: delete failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
+	log.Info().Stringer("chapter_id", id).Msg("chapter_delivery: deleted")
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (d *Delivery) Publish(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	id, err := uuid.Parse(mux.Vars(r)["id"])
 	if err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid chapter id")
 		return
 	}
-
 	if err := d.uc.Publish(r.Context(), id); err != nil {
+		log.Warn().Err(err).Stringer("chapter_id", id).Msg("chapter_delivery: publish failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
-
+	log.Info().Stringer("chapter_id", id).Msg("chapter_delivery: published")
 	utilities.WriteJSON(w, http.StatusOK, map[string]string{"status": "published"})
 }

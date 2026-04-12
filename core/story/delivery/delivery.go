@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fivecode/plotty/core/logger"
 	storyuc "github.com/fivecode/plotty/core/story/usecase"
 	"github.com/fivecode/plotty/core/utilities"
 	"github.com/google/uuid"
@@ -48,6 +49,8 @@ func parseTagSlugs(r *http.Request) []string {
 }
 
 func (d *Delivery) List(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page == 0 {
@@ -57,8 +60,10 @@ func (d *Delivery) List(w http.ResponseWriter, r *http.Request) {
 	if pageSize == 0 {
 		pageSize = 20
 	}
+
 	items, total, err := d.uc.List(r.Context(), q, parseTagSlugs(r), page, pageSize)
 	if err != nil {
+		log.Warn().Err(err).Msg("story_delivery: list failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
@@ -78,16 +83,23 @@ type createStoryBody struct {
 }
 
 func (d *Delivery) Create(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	var body createStoryBody
 	if err := utilities.DecodeJSON(r, &body); err != nil {
+		log.Warn().Err(err).Msg("story_delivery: create invalid json")
 		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+
 	s, err := d.uc.Create(r.Context(), body.Title, body.TagIDs)
 	if err != nil {
+		log.Warn().Err(err).Str("title", body.Title).Msg("story_delivery: create failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
+
+	log.Info().Stringer("story_id", s.ID).Msg("story_delivery: created")
 	utilities.WriteJSON(w, http.StatusCreated, s)
 }
 
@@ -97,18 +109,24 @@ type patchStoryBody struct {
 }
 
 func (d *Delivery) Patch(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	id, err := uuid.Parse(mux.Vars(r)["id"])
 	if err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
+
 	var body patchStoryBody
 	if err := utilities.DecodeJSON(r, &body); err != nil {
+		log.Warn().Err(err).Stringer("story_id", id).Msg("story_delivery: patch invalid json")
 		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+
 	s, err := d.uc.Update(r.Context(), id, body.Title, body.TagIDs)
 	if err != nil {
+		log.Warn().Err(err).Stringer("story_id", id).Msg("story_delivery: patch failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
@@ -116,13 +134,17 @@ func (d *Delivery) Patch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Delivery) GetBySlug(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	slug := strings.TrimSpace(mux.Vars(r)["slug"])
 	if slug == "" {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid slug")
 		return
 	}
+
 	detail, err := d.uc.GetBySlug(r.Context(), slug)
 	if err != nil {
+		log.Warn().Err(err).Str("slug", slug).Msg("story_delivery: get by slug failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
@@ -130,14 +152,20 @@ func (d *Delivery) GetBySlug(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Delivery) Delete(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	id, err := uuid.Parse(mux.Vars(r)["id"])
 	if err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
+
 	if err := d.uc.Delete(r.Context(), id); err != nil {
+		log.Warn().Err(err).Stringer("story_id", id).Msg("story_delivery: delete failed")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
+
+	log.Info().Stringer("story_id", id).Msg("story_delivery: deleted")
 	w.WriteHeader(http.StatusNoContent)
 }

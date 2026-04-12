@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
 	"github.com/google/uuid"
@@ -23,9 +24,12 @@ func New(pool *pgxpool.Pool) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, s models.Story, tagIDs []uuid.UUID) (*models.Story, error) {
+	log := logger.FromContext(ctx)
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("story_repo: failed to begin tx for create")
+		return nil, fmt.Errorf("story_repo.Create begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -39,29 +43,36 @@ func (r *Repository) Create(ctx context.Context, s models.Story, tagIDs []uuid.U
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, named_errors.ErrConflict
 		}
-		return nil, err
+		log.Error().Err(err).Stringer("story_id", s.ID).Msg("story_repo: insert failed")
+		return nil, fmt.Errorf("story_repo.Create insert: %w", err)
 	}
 	for _, tid := range tagIDs {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO story_tags (story_id, tag_id) VALUES ($1, $2)
 			ON CONFLICT DO NOTHING
 		`, s.ID, tid); err != nil {
-			return nil, err
+			log.Error().Err(err).Stringer("story_id", s.ID).Stringer("tag_id", tid).Msg("story_repo: insert tag failed")
+			return nil, fmt.Errorf("story_repo.Create insert tag: %w", err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("story_repo: commit failed")
+		return nil, fmt.Errorf("story_repo.Create commit: %w", err)
 	}
 	s.Status = "draft"
 	s.CreatedAt = now
 	s.UpdatedAt = now
+
+	log.Info().Stringer("story_id", s.ID).Str("slug", s.Slug).Msg("story_repo: created")
 	return &s, nil
 }
 
 func (r *Repository) Update(ctx context.Context, id uuid.UUID, title *string, tagIDs *[]uuid.UUID) (*models.Story, error) {
+	log := logger.FromContext(ctx)
+
 	cur, err := r.GetByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("story_repo.Update get current: %w", err)
 	}
 	newTitle := cur.Title
 	if title != nil {
@@ -71,7 +82,8 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, title *string, ta
 
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("story_id", id).Msg("story_repo: failed to begin tx for update")
+		return nil, fmt.Errorf("story_repo.Update begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -80,25 +92,31 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, title *string, ta
 		WHERE id = $1
 	`, id, newTitle, now)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("story_id", id).Msg("story_repo: update failed")
+		return nil, fmt.Errorf("story_repo.Update exec: %w", err)
 	}
 	if tagIDs != nil {
 		if _, err := tx.Exec(ctx, `DELETE FROM story_tags WHERE story_id = $1`, id); err != nil {
-			return nil, err
+			log.Error().Err(err).Stringer("story_id", id).Msg("story_repo: delete old tags failed")
+			return nil, fmt.Errorf("story_repo.Update delete tags: %w", err)
 		}
 		for _, tid := range *tagIDs {
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO story_tags (story_id, tag_id) VALUES ($1, $2)
 			`, id, tid); err != nil {
-				return nil, err
+				log.Error().Err(err).Stringer("story_id", id).Stringer("tag_id", tid).Msg("story_repo: insert tag failed")
+				return nil, fmt.Errorf("story_repo.Update insert tag: %w", err)
 			}
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("story_id", id).Msg("story_repo: commit failed")
+		return nil, fmt.Errorf("story_repo.Update commit: %w", err)
 	}
 	cur.Title = newTitle
 	cur.UpdatedAt = now
+
+	log.Info().Stringer("story_id", id).Msg("story_repo: updated")
 	return cur, nil
 }
 
@@ -112,7 +130,8 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*models.Story, 
 		return nil, named_errors.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		logger.Ctx(ctx).Error().Err(err).Stringer("story_id", id).Msg("story_repo: GetByID query failed")
+		return nil, fmt.Errorf("story_repo.GetByID: %w", err)
 	}
 	return &s, nil
 }
@@ -127,7 +146,8 @@ func (r *Repository) GetBySlug(ctx context.Context, slug string) (*models.Story,
 		return nil, named_errors.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		logger.Ctx(ctx).Error().Err(err).Str("slug", slug).Msg("story_repo: GetBySlug query failed")
+		return nil, fmt.Errorf("story_repo.GetBySlug: %w", err)
 	}
 	return &s, nil
 }
@@ -135,11 +155,13 @@ func (r *Repository) GetBySlug(ctx context.Context, slug string) (*models.Story,
 func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	cmd, err := r.pool.Exec(ctx, `DELETE FROM stories WHERE id = $1`, id)
 	if err != nil {
-		return err
+		logger.Ctx(ctx).Error().Err(err).Stringer("story_id", id).Msg("story_repo: delete failed")
+		return fmt.Errorf("story_repo.Delete: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
 		return named_errors.ErrNotFound
 	}
+	logger.Ctx(ctx).Info().Stringer("story_id", id).Msg("story_repo: deleted")
 	return nil
 }
 
@@ -172,7 +194,7 @@ func (r *Repository) groupTagSlugsByCategory(ctx context.Context, tagSlugs []str
 		WHERE slug = ANY($1::text[])
 	`, tagSlugs)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("story_repo.groupTagSlugsByCategory: %w", err)
 	}
 	defer rows.Close()
 
@@ -181,13 +203,13 @@ func (r *Repository) groupTagSlugsByCategory(ctx context.Context, tagSlugs []str
 	for rows.Next() {
 		var rr row
 		if err := rows.Scan(&rr.category, &rr.slug); err != nil {
-			return nil, 0, err
+			return nil, 0, fmt.Errorf("story_repo.groupTagSlugsByCategory scan: %w", err)
 		}
 		out[rr.category] = append(out[rr.category], rr.slug)
 		found++
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("story_repo.groupTagSlugsByCategory rows: %w", err)
 	}
 	return out, found, nil
 }
@@ -230,14 +252,15 @@ func (r *Repository) ListIDs(ctx context.Context, q string, tagSlugs []string, l
 		LIMIT $2 OFFSET $3
 	`, whereTags), args...)
 	if err != nil {
-		return nil, err
+		logger.Ctx(ctx).Error().Err(err).Msg("story_repo: ListIDs query failed")
+		return nil, fmt.Errorf("story_repo.ListIDs: %w", err)
 	}
 	defer rows.Close()
 	var ids []uuid.UUID
 	for rows.Next() {
 		var id uuid.UUID
 		if err := rows.Scan(&id); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("story_repo.ListIDs scan: %w", err)
 		}
 		ids = append(ids, id)
 	}
@@ -278,7 +301,11 @@ func (r *Repository) CountList(ctx context.Context, q string, tagSlugs []string)
 		WHERE ($1 = '' OR s.title ILIKE '%%' || $1 || '%%')
 		%s
 	`, whereTags), args...).Scan(&total)
-	return total, err
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Msg("story_repo: CountList failed")
+		return 0, fmt.Errorf("story_repo.CountList: %w", err)
+	}
+	return total, nil
 }
 
 func (r *Repository) LoadStoriesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]models.Story, error) {
@@ -290,14 +317,15 @@ func (r *Repository) LoadStoriesByIDs(ctx context.Context, ids []uuid.UUID) (map
 		FROM stories WHERE id = ANY($1)
 	`, ids)
 	if err != nil {
-		return nil, err
+		logger.Ctx(ctx).Error().Err(err).Msg("story_repo: LoadStoriesByIDs query failed")
+		return nil, fmt.Errorf("story_repo.LoadStoriesByIDs: %w", err)
 	}
 	defer rows.Close()
 	m := make(map[uuid.UUID]models.Story, len(ids))
 	for rows.Next() {
 		var s models.Story
 		if err := rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AuthorID, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("story_repo.LoadStoriesByIDs scan: %w", err)
 		}
 		m[s.ID] = s
 	}
@@ -317,14 +345,14 @@ func (r *Repository) TagsForStories(ctx context.Context, storyIDs []uuid.UUID) (
 		ORDER BY t.category ASC, t.name ASC
 	`, storyIDs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("story_repo.TagsForStories: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var sid uuid.UUID
 		var t models.Tag
 		if err := rows.Scan(&sid, &t.ID, &t.Category, &t.Slug, &t.Name); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("story_repo.TagsForStories scan: %w", err)
 		}
 		out[sid] = append(out[sid], t)
 	}
@@ -340,14 +368,14 @@ func (r *Repository) ChapterCounts(ctx context.Context, storyIDs []uuid.UUID) (m
 		SELECT story_id, COUNT(*)::int FROM chapters WHERE story_id = ANY($1) GROUP BY story_id
 	`, storyIDs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("story_repo.ChapterCounts: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var sid uuid.UUID
 		var c int
 		if err := rows.Scan(&sid, &c); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("story_repo.ChapterCounts scan: %w", err)
 		}
 		out[sid] = c
 	}
@@ -371,14 +399,14 @@ func (r *Repository) LikeCounts(ctx context.Context, storyIDs []uuid.UUID) (map[
 		SELECT story_id, COUNT(*)::int FROM story_likes WHERE story_id = ANY($1) GROUP BY story_id
 	`, storyIDs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("story_repo.LikeCounts: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var sid uuid.UUID
 		var c int
 		if err := rows.Scan(&sid, &c); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("story_repo.LikeCounts scan: %w", err)
 		}
 		out[sid] = c
 	}
@@ -388,7 +416,10 @@ func (r *Repository) LikeCounts(ctx context.Context, storyIDs []uuid.UUID) (map[
 func (r *Repository) LikeCount(ctx context.Context, storyID uuid.UUID) (int, error) {
 	var c int
 	err := r.pool.QueryRow(ctx, `SELECT COUNT(*)::int FROM story_likes WHERE story_id = $1`, storyID).Scan(&c)
-	return c, err
+	if err != nil {
+		return 0, fmt.Errorf("story_repo.LikeCount: %w", err)
+	}
+	return c, nil
 }
 
 func (r *Repository) IsLikedByUser(ctx context.Context, storyID uuid.UUID, userID uint64) (bool, error) {
@@ -396,7 +427,10 @@ func (r *Repository) IsLikedByUser(ctx context.Context, storyID uuid.UUID, userI
 	err := r.pool.QueryRow(ctx, `
 		SELECT EXISTS(SELECT 1 FROM story_likes WHERE story_id = $1 AND user_id = $2)
 	`, storyID, userID).Scan(&exists)
-	return exists, err
+	if err != nil {
+		return false, fmt.Errorf("story_repo.IsLikedByUser: %w", err)
+	}
+	return exists, nil
 }
 
 func (r *Repository) AuthorsForStories(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]*models.StoryAuthor, error) {
@@ -411,7 +445,7 @@ func (r *Repository) AuthorsForStories(ctx context.Context, storyIDs []uuid.UUID
 		WHERE s.id = ANY($1) AND s.author_id IS NOT NULL
 	`, storyIDs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("story_repo.AuthorsForStories: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -419,7 +453,7 @@ func (r *Repository) AuthorsForStories(ctx context.Context, storyIDs []uuid.UUID
 		var a models.StoryAuthor
 		var avatar *string
 		if err := rows.Scan(&sid, &a.ID, &a.Username, &avatar); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("story_repo.AuthorsForStories scan: %w", err)
 		}
 		a.AvatarURL = avatar
 		out[sid] = &a
@@ -438,12 +472,17 @@ func (r *Repository) GetAuthorForStory(ctx context.Context, storyID uuid.UUID) (
 func (r *Repository) Publish(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `UPDATE stories SET status = 'published', updated_at = $2 WHERE id = $1 AND status = 'draft'`, id, time.Now().UTC())
 	if err != nil {
-		return err
+		logger.Ctx(ctx).Error().Err(err).Stringer("story_id", id).Msg("story_repo: publish failed")
+		return fmt.Errorf("story_repo.Publish: %w", err)
 	}
 	return nil
 }
 
 func (r *Repository) UpdateAISummary(ctx context.Context, storyID uuid.UUID, summary string) error {
 	_, err := r.pool.Exec(ctx, `UPDATE stories SET ai_summary = $2 WHERE id = $1`, storyID, summary)
-	return err
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Stringer("story_id", storyID).Msg("story_repo: update ai_summary failed")
+		return fmt.Errorf("story_repo.UpdateAISummary: %w", err)
+	}
+	return nil
 }

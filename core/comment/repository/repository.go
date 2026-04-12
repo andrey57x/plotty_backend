@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,6 +20,8 @@ func New(pool *pgxpool.Pool) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, chapterID uuid.UUID, userID uint64, content string) (*models.Comment, error) {
+	log := logger.FromContext(ctx)
+
 	id := uuid.New()
 	now := time.Now().UTC()
 	_, err := r.pool.Exec(ctx, `
@@ -25,7 +29,8 @@ func (r *Repository) Create(ctx context.Context, chapterID uuid.UUID, userID uin
 		VALUES ($1, $2, $3, $4, $5)
 	`, id, chapterID, userID, content, now)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("chapter_id", chapterID).Uint64("user_id", userID).Msg("comment_repo: insert failed")
+		return nil, fmt.Errorf("comment_repo.Create insert: %w", err)
 	}
 
 	var c models.Comment
@@ -36,8 +41,11 @@ func (r *Repository) Create(ctx context.Context, chapterID uuid.UUID, userID uin
 		WHERE cc.id = $1
 	`, id).Scan(&c.ID, &c.ChapterID, &c.UserID, &c.Username, &c.AvatarURL, &c.Content, &c.CreatedAt)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("comment_id", id).Msg("comment_repo: select after insert failed")
+		return nil, fmt.Errorf("comment_repo.Create select: %w", err)
 	}
+
+	log.Info().Stringer("comment_id", id).Stringer("chapter_id", chapterID).Msg("comment_repo: created")
 	return &c, nil
 }
 
@@ -47,7 +55,7 @@ func (r *Repository) ListByChapter(ctx context.Context, chapterID uuid.UUID, lim
 		SELECT COUNT(*)::int FROM chapter_comments WHERE chapter_id = $1
 	`, chapterID).Scan(&total)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("comment_repo.ListByChapter count: %w", err)
 	}
 
 	rows, err := r.pool.Query(ctx, `
@@ -59,7 +67,7 @@ func (r *Repository) ListByChapter(ctx context.Context, chapterID uuid.UUID, lim
 		LIMIT $2 OFFSET $3
 	`, chapterID, limit, offset)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("comment_repo.ListByChapter query: %w", err)
 	}
 	defer rows.Close()
 
@@ -67,7 +75,7 @@ func (r *Repository) ListByChapter(ctx context.Context, chapterID uuid.UUID, lim
 	for rows.Next() {
 		var c models.Comment
 		if err := rows.Scan(&c.ID, &c.ChapterID, &c.UserID, &c.Username, &c.AvatarURL, &c.Content, &c.CreatedAt); err != nil {
-			return nil, 0, err
+			return nil, 0, fmt.Errorf("comment_repo.ListByChapter scan: %w", err)
 		}
 		comments = append(comments, c)
 	}
@@ -79,11 +87,19 @@ func (r *Repository) ListByChapter(ctx context.Context, chapterID uuid.UUID, lim
 
 func (r *Repository) Delete(ctx context.Context, commentID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM chapter_comments WHERE id = $1`, commentID)
-	return err
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Stringer("comment_id", commentID).Msg("comment_repo: delete failed")
+		return fmt.Errorf("comment_repo.Delete: %w", err)
+	}
+	logger.Ctx(ctx).Info().Stringer("comment_id", commentID).Msg("comment_repo: deleted")
+	return nil
 }
 
 func (r *Repository) GetOwnerID(ctx context.Context, commentID uuid.UUID) (uint64, error) {
 	var userID uint64
 	err := r.pool.QueryRow(ctx, `SELECT user_id FROM chapter_comments WHERE id = $1`, commentID).Scan(&userID)
-	return userID, err
+	if err != nil {
+		return 0, fmt.Errorf("comment_repo.GetOwnerID: %w", err)
+	}
+	return userID, nil
 }

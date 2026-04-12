@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
 	"github.com/google/uuid"
@@ -39,14 +41,15 @@ func (r *Repository) List(ctx context.Context, category string) ([]models.Tag, e
 		`, category)
 	}
 	if err != nil {
-		return nil, err
+		logger.Ctx(ctx).Error().Err(err).Str("category", category).Msg("tag_repo: list query failed")
+		return nil, fmt.Errorf("tag_repo.List: %w", err)
 	}
 	defer rows.Close()
 	var out []models.Tag
 	for rows.Next() {
 		var t models.Tag
 		if err := rows.Scan(&t.ID, &t.Category, &t.Slug, &t.Name); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("tag_repo.List scan: %w", err)
 		}
 		out = append(out, t)
 	}
@@ -62,7 +65,8 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*models.Tag, er
 		return nil, named_errors.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		logger.Ctx(ctx).Error().Err(err).Stringer("tag_id", id).Msg("tag_repo: GetByID failed")
+		return nil, fmt.Errorf("tag_repo.GetByID: %w", err)
 	}
 	return &t, nil
 }
@@ -74,7 +78,8 @@ func (r *Repository) ValidateAllExist(ctx context.Context, ids []uuid.UUID) erro
 	var n int
 	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM tags WHERE id = ANY($1)`, ids).Scan(&n)
 	if err != nil {
-		return err
+		logger.Ctx(ctx).Error().Err(err).Msg("tag_repo: ValidateAllExist failed")
+		return fmt.Errorf("tag_repo.ValidateAllExist: %w", err)
 	}
 	if n != len(ids) {
 		return named_errors.ErrInvalidInput

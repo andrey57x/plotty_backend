@@ -94,7 +94,16 @@ func (u *AuthUsecase) Logout(ctx context.Context, sessionID string) error {
 }
 
 func (u *AuthUsecase) UpdateProfile(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error) {
-	return u.Repository.UpdateUser(ctx, userID, username, avatarURL)
+	log := logger.FromContext(ctx)
+
+	user, err := u.Repository.UpdateUser(ctx, userID, username, avatarURL)
+	if err != nil {
+		log.Error().Err(err).Uint64("user_id", userID).Msg("auth_uc: update profile failed")
+		return nil, fmt.Errorf("auth_uc.UpdateProfile: %w", err)
+	}
+
+	log.Info().Uint64("user_id", userID).Msg("auth_uc: profile updated")
+	return user, nil
 }
 
 func (u *AuthUsecase) GetUserBySession(ctx context.Context, sessionID string) (*models.User, error) {
@@ -102,7 +111,8 @@ func (u *AuthUsecase) GetUserBySession(ctx context.Context, sessionID string) (*
 
 	userID, err := u.Repository.GetUserIDBySession(ctx, sessionID)
 	if err != nil {
-		return nil, err
+		log.Warn().Err(err).Msg("auth_uc: get user id by session failed")
+		return nil, fmt.Errorf("auth_uc.GetUserBySession session: %w", err)
 	}
 
 	user, err := u.Repository.GetUserByID(ctx, userID)

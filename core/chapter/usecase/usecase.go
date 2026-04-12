@@ -3,16 +3,17 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
+	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog/log"
 )
 
 type StoryAuthorChecker interface {
@@ -36,6 +37,8 @@ func (u *Usecase) SetAuthorChecker(checker StoryAuthorChecker) {
 }
 
 func (u *Usecase) Create(ctx context.Context, storyID uuid.UUID, title, content string) (*models.Chapter, error) {
+	log := logger.FromContext(ctx)
+
 	if u.authChecker != nil {
 		if err := u.authChecker.CheckAuthorByStory(ctx, storyID); err != nil {
 			return nil, err
@@ -46,12 +49,21 @@ func (u *Usecase) Create(ctx context.Context, storyID uuid.UUID, title, content 
 		return nil, named_errors.ErrInvalidInput
 	}
 	if _, err := u.stories.GetByID(ctx, storyID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("chapter_uc.Create get story: %w", err)
 	}
-	return u.chapters.Create(ctx, storyID, title, content)
+	ch, err := u.chapters.Create(ctx, storyID, title, content)
+	if err != nil {
+		log.Error().Err(err).Stringer("story_id", storyID).Msg("chapter_uc: create failed")
+		return nil, fmt.Errorf("chapter_uc.Create: %w", err)
+	}
+
+	log.Info().Stringer("chapter_id", ch.ID).Stringer("story_id", storyID).Msg("chapter_uc: created")
+	return ch, nil
 }
 
 func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, content *string) (*models.Chapter, error) {
+	log := logger.FromContext(ctx)
+
 	if u.authChecker != nil {
 		if err := u.authChecker.CheckAuthorByChapter(ctx, id); err != nil {
 			return nil, err
@@ -71,7 +83,14 @@ func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, conte
 		}
 		title = &t
 	}
-	return u.chapters.Update(ctx, id, title, content)
+	ch, err := u.chapters.Update(ctx, id, title, content)
+	if err != nil {
+		log.Error().Err(err).Stringer("chapter_id", id).Msg("chapter_uc: update failed")
+		return nil, fmt.Errorf("chapter_uc.Update: %w", err)
+	}
+
+	log.Info().Stringer("chapter_id", id).Msg("chapter_uc: updated")
+	return ch, nil
 }
 
 type ChapterWithImage struct {
@@ -82,11 +101,12 @@ type ChapterWithImage struct {
 func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*ChapterWithImage, error) {
 	ch, err := u.chapters.GetByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("chapter_uc.Get: %w", err)
 	}
 	imgURL, err := u.chapters.GetLatestImageURL(ctx, id)
 	if err != nil {
-		return nil, err
+		logger.Ctx(ctx).Error().Err(err).Stringer("chapter_id", id).Msg("chapter_uc: get image url failed")
+		return nil, fmt.Errorf("chapter_uc.Get image: %w", err)
 	}
 	return &ChapterWithImage{Chapter: *ch, ImageURL: imgURL}, nil
 }
@@ -97,10 +117,16 @@ func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
 			return err
 		}
 	}
-	return u.chapters.Delete(ctx, id)
+	if err := u.chapters.Delete(ctx, id); err != nil {
+		return fmt.Errorf("chapter_uc.Delete: %w", err)
+	}
+	logger.Ctx(ctx).Info().Stringer("chapter_id", id).Msg("chapter_uc: deleted")
+	return nil
 }
 
 func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
+	log := logger.FromContext(ctx)
+
 	if u.authChecker != nil {
 		if err := u.authChecker.CheckAuthorByChapter(ctx, chapterID); err != nil {
 			return err
@@ -108,25 +134,25 @@ func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
 	}
 	ch, err := u.chapters.GetByID(ctx, chapterID)
 	if err != nil {
-		return err
+		return fmt.Errorf("chapter_uc.Publish get chapter: %w", err)
 	}
 
 	if ch.Status == "published" {
+		log.Info().Stringer("chapter_id", chapterID).Msg("chapter_uc: already published, skipping")
 		return nil
 	}
 
-	// 1. Публикуем главу
 	if err := u.chapters.Publish(ctx, chapterID); err != nil {
-		return err
+		return fmt.Errorf("chapter_uc.Publish chapter: %w", err)
 	}
 
-	// 2. Публикуем историю (состояние обновится, если она была в draft)
-	_ = u.stories.Publish(ctx, ch.StoryID)
+	if err := u.stories.Publish(ctx, ch.StoryID); err != nil {
+		log.Warn().Err(err).Stringer("story_id", ch.StoryID).Msg("chapter_uc: publish story failed (non-fatal)")
+	}
 
-	// 3. Отправляем задачу в ML: "Извлечь лор (Story State)"
 	loreTask := rabbitmq.MLTaskMessage{
 		TaskID:  uuid.NewString(),
-		TraceID: uuid.NewString(), // В будущем можно брать из логгера
+		TraceID: uuid.NewString(),
 		Type:    "extract_lore",
 		Payload: ch.Content,
 		Metadata: map[string]string{
@@ -136,8 +162,10 @@ func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
 	}
 	u.publishToRabbitMQ(ctx, loreTask)
 
-	// 4. Логика генерации Summary:
-	briefs, _ := u.chapters.ListBriefByStory(ctx, ch.StoryID)
+	briefs, err := u.chapters.ListBriefByStory(ctx, ch.StoryID)
+	if err != nil {
+		log.Warn().Err(err).Stringer("story_id", ch.StoryID).Msg("chapter_uc: list briefs failed (non-fatal)")
+	}
 	publishedCount := 0
 	for _, b := range briefs {
 		if b.Status == "published" {
@@ -158,16 +186,23 @@ func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
 		u.publishToRabbitMQ(ctx, summaryTask)
 	}
 
+	log.Info().Stringer("chapter_id", chapterID).Stringer("story_id", ch.StoryID).Msg("chapter_uc: published")
 	return nil
 }
 
 func (u *Usecase) publishToRabbitMQ(ctx context.Context, task rabbitmq.MLTaskMessage) {
-	body, _ := json.Marshal(task)
-	err := u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+	log := logger.FromContext(ctx)
+	body, err := json.Marshal(task)
+	if err != nil {
+		log.Error().Err(err).Str("task_type", task.Type).Msg("chapter_uc: failed to marshal ML task")
+		return
+	}
+	if err := u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
 		ContentType: "application/json",
 		Body:        body,
-	})
-	if err != nil {
-		log.Error().Err(err).Str("task_type", task.Type).Msg("failed to publish ML task")
+	}); err != nil {
+		log.Error().Err(err).Str("task_type", task.Type).Msg("chapter_uc: failed to publish ML task")
+	} else {
+		log.Info().Str("task_type", task.Type).Str("task_id", task.TaskID).Msg("chapter_uc: ML task published")
 	}
 }

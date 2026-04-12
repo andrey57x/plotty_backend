@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
+	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/middleware"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
@@ -40,6 +41,8 @@ func dedupeUUIDs(ids []uuid.UUID) []uuid.UUID {
 }
 
 func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, pageSize int) ([]models.StoryListItem, int, error) {
+	log := logger.FromContext(ctx)
+
 	if page < 1 {
 		page = 1
 	}
@@ -50,37 +53,46 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 		pageSize = 100
 	}
 	offset := (page - 1) * pageSize
+
 	total, err := u.stories.CountList(ctx, q, tagSlugs)
 	if err != nil {
-		return nil, 0, err
+		log.Error().Err(err).Msg("story_uc: CountList failed")
+		return nil, 0, fmt.Errorf("story_uc.List count: %w", err)
 	}
 	ids, err := u.stories.ListIDs(ctx, q, tagSlugs, pageSize, offset)
 	if err != nil {
-		return nil, 0, err
+		log.Error().Err(err).Msg("story_uc: ListIDs failed")
+		return nil, 0, fmt.Errorf("story_uc.List ids: %w", err)
 	}
 	if len(ids) == 0 {
 		return []models.StoryListItem{}, total, nil
 	}
 	byID, err := u.stories.LoadStoriesByIDs(ctx, ids)
 	if err != nil {
-		return nil, 0, err
+		log.Error().Err(err).Msg("story_uc: LoadStoriesByIDs failed")
+		return nil, 0, fmt.Errorf("story_uc.List load: %w", err)
 	}
 	tagsMap, err := u.stories.TagsForStories(ctx, ids)
 	if err != nil {
-		return nil, 0, err
+		log.Error().Err(err).Msg("story_uc: TagsForStories failed")
+		return nil, 0, fmt.Errorf("story_uc.List tags: %w", err)
 	}
 	counts, err := u.stories.ChapterCounts(ctx, ids)
 	if err != nil {
-		return nil, 0, err
+		log.Error().Err(err).Msg("story_uc: ChapterCounts failed")
+		return nil, 0, fmt.Errorf("story_uc.List chapter counts: %w", err)
 	}
 	likes, err := u.stories.LikeCounts(ctx, ids)
 	if err != nil {
-		return nil, 0, err
+		log.Error().Err(err).Msg("story_uc: LikeCounts failed")
+		return nil, 0, fmt.Errorf("story_uc.List likes: %w", err)
 	}
 	authors, err := u.stories.AuthorsForStories(ctx, ids)
 	if err != nil {
-		return nil, 0, err
+		log.Error().Err(err).Msg("story_uc: AuthorsForStories failed")
+		return nil, 0, fmt.Errorf("story_uc.List authors: %w", err)
 	}
+
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
 		s, ok := byID[id]
@@ -95,12 +107,17 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 			Author:        authors[id],
 		})
 	}
+
+	log.Info().Int("total", total).Int("returned", len(items)).Msg("story_uc: list ok")
 	return items, total, nil
 }
 
 func (u *Usecase) Create(ctx context.Context, title string, tagIDs []uuid.UUID) (*models.Story, error) {
+	log := logger.FromContext(ctx)
+
 	userID, ok := middleware.GetUserID(ctx)
 	if !ok {
+		log.Warn().Msg("story_uc: create without auth")
 		return nil, named_errors.ErrNoAccess
 	}
 	title = strings.TrimSpace(title)
@@ -109,8 +126,10 @@ func (u *Usecase) Create(ctx context.Context, title string, tagIDs []uuid.UUID) 
 	}
 	tagIDs = dedupeUUIDs(tagIDs)
 	if err := u.tags.ValidateAllExist(ctx, tagIDs); err != nil {
-		return nil, err
+		log.Warn().Err(err).Msg("story_uc: invalid tag ids")
+		return nil, fmt.Errorf("story_uc.Create validate tags: %w", err)
 	}
+
 	base := slug.FromTitle(title)
 	s := models.Story{
 		ID:       uuid.New(),
@@ -124,12 +143,13 @@ func (u *Usecase) Create(ctx context.Context, title string, tagIDs []uuid.UUID) 
 		}
 		created, err := u.stories.Create(ctx, s, tagIDs)
 		if err == nil {
+			log.Info().Stringer("story_id", created.ID).Uint64("author_id", userID).Msg("story_uc: created")
 			return created, nil
 		}
 		if errors.Is(err, named_errors.ErrConflict) {
 			continue
 		}
-		return nil, err
+		return nil, fmt.Errorf("story_uc.Create: %w", err)
 	}
 	return nil, named_errors.ErrConflict
 }
@@ -141,9 +161,13 @@ func (u *Usecase) checkAuthor(ctx context.Context, storyID uuid.UUID) error {
 	}
 	story, err := u.stories.GetByID(ctx, storyID)
 	if err != nil {
-		return err
+		return fmt.Errorf("story_uc.checkAuthor get story: %w", err)
 	}
 	if story.AuthorID == nil || *story.AuthorID != userID {
+		logger.Ctx(ctx).Warn().
+			Uint64("user_id", userID).
+			Stringer("story_id", storyID).
+			Msg("story_uc: access denied, not author")
 		return named_errors.ErrNoAccess
 	}
 	return nil
@@ -152,7 +176,7 @@ func (u *Usecase) checkAuthor(ctx context.Context, storyID uuid.UUID) error {
 func (u *Usecase) CheckAuthorByChapter(ctx context.Context, chapterID uuid.UUID) error {
 	ch, err := u.chapters.GetByID(ctx, chapterID)
 	if err != nil {
-		return err
+		return fmt.Errorf("story_uc.CheckAuthorByChapter: %w", err)
 	}
 	return u.checkAuthor(ctx, ch.StoryID)
 }
@@ -162,38 +186,53 @@ func (u *Usecase) CheckAuthorByStory(ctx context.Context, storyID uuid.UUID) err
 }
 
 func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, tagIDs *[]uuid.UUID) (*models.Story, error) {
+	log := logger.FromContext(ctx)
+
 	if err := u.checkAuthor(ctx, id); err != nil {
 		return nil, err
 	}
 	if tagIDs != nil {
 		*tagIDs = dedupeUUIDs(*tagIDs)
 		if err := u.tags.ValidateAllExist(ctx, *tagIDs); err != nil {
-			return nil, err
+			log.Warn().Err(err).Stringer("story_id", id).Msg("story_uc: invalid tag ids on update")
+			return nil, fmt.Errorf("story_uc.Update validate tags: %w", err)
 		}
 	}
-	return u.stories.Update(ctx, id, title, tagIDs)
+	s, err := u.stories.Update(ctx, id, title, tagIDs)
+	if err != nil {
+		return nil, fmt.Errorf("story_uc.Update: %w", err)
+	}
+
+	log.Info().Stringer("story_id", id).Msg("story_uc: updated")
+	return s, nil
 }
 
 func (u *Usecase) GetBySlug(ctx context.Context, storySlug string) (*models.StoryDetail, error) {
+	log := logger.FromContext(ctx)
+
 	s, err := u.stories.GetBySlug(ctx, storySlug)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("story_uc.GetBySlug story: %w", err)
 	}
 	tags, err := u.stories.TagsForStory(ctx, s.ID)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("story_id", s.ID).Msg("story_uc: TagsForStory failed")
+		return nil, fmt.Errorf("story_uc.GetBySlug tags: %w", err)
 	}
 	chs, err := u.chapters.ListBriefByStory(ctx, s.ID)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("story_id", s.ID).Msg("story_uc: ListBriefByStory failed")
+		return nil, fmt.Errorf("story_uc.GetBySlug chapters: %w", err)
 	}
 	likesCount, err := u.stories.LikeCount(ctx, s.ID)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("story_id", s.ID).Msg("story_uc: LikeCount failed")
+		return nil, fmt.Errorf("story_uc.GetBySlug likes: %w", err)
 	}
 	author, err := u.stories.GetAuthorForStory(ctx, s.ID)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Stringer("story_id", s.ID).Msg("story_uc: GetAuthorForStory failed")
+		return nil, fmt.Errorf("story_uc.GetBySlug author: %w", err)
 	}
 	var likedByMe bool
 	if uid, ok := middleware.GetUserID(ctx); ok {
@@ -213,5 +252,9 @@ func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := u.checkAuthor(ctx, id); err != nil {
 		return err
 	}
-	return u.stories.Delete(ctx, id)
+	if err := u.stories.Delete(ctx, id); err != nil {
+		return fmt.Errorf("story_uc.Delete: %w", err)
+	}
+	logger.Ctx(ctx).Info().Stringer("story_id", id).Msg("story_uc: deleted")
+	return nil
 }
