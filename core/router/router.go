@@ -15,7 +15,13 @@ import (
 	chdeliv "github.com/fivecode/plotty/core/chapter/delivery"
 	chrepo "github.com/fivecode/plotty/core/chapter/repository"
 	chuc "github.com/fivecode/plotty/core/chapter/usecase"
+	commentdeliv "github.com/fivecode/plotty/core/comment/delivery"
+	commentrepo "github.com/fivecode/plotty/core/comment/repository"
+	commentuc "github.com/fivecode/plotty/core/comment/usecase"
 	"github.com/fivecode/plotty/core/config"
+	likedeliv "github.com/fivecode/plotty/core/like/delivery"
+	likerepo "github.com/fivecode/plotty/core/like/repository"
+	likeuc "github.com/fivecode/plotty/core/like/usecase"
 	"github.com/fivecode/plotty/core/middleware"
 	"github.com/fivecode/plotty/core/redis"
 	storydeliv "github.com/fivecode/plotty/core/story/delivery"
@@ -38,12 +44,17 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	cr := chrepo.New(pool)
 	ar := airepo.New(pool)
 	authr := authrepo.New(pool, redisDB)
+	lr := likerepo.New(pool)
+	comr := commentrepo.New(pool)
 
 	tu := taguc.New(tr)
 	su := storyuc.New(sr, tr, cr)
 	cu := chuc.New(cr, sr, rmqChan)
+	cu.SetAuthorChecker(su)
 	au := aiuc.New(ar, cr, sr, rmqChan)
 	authu := authuc.New(authr)
+	lu := likeuc.New(lr)
+	comu := commentuc.New(comr)
 
 	sessionDuration := time.Duration(cfg.SessionDurationDays) * 24 * time.Hour
 
@@ -52,6 +63,8 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	td := tagdeliv.New(tu)
 	ad := aideliv.New(au)
 	authd := authdeliv.New(authu, sessionDuration)
+	ld := likedeliv.New(lu)
+	comd := commentdeliv.New(comu)
 
 	go func() {
 		msgs, err := rmqChan.Consume("ml_results_queue", "core_worker", false, false, false, false, nil)
@@ -71,6 +84,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	r.Use(middleware.RequestIDMiddleware, middleware.AccessLogMiddleware)
 
 	api := r.PathPrefix("/api").Subrouter()
+	api.Use(middleware.OptionalAuthMiddleware(redisDB))
 
 	api.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -86,6 +100,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	api.HandleFunc("/stories/{slug}", sd.GetBySlug).Methods(http.MethodGet)
 
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Get).Methods(http.MethodGet)
+	api.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.List).Methods(http.MethodGet)
 
 	api.HandleFunc("/tags", td.List).Methods(http.MethodGet)
 
@@ -99,11 +114,18 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 
 	protected.HandleFunc("/stories", sd.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Patch).Methods(http.MethodPatch)
-	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/publish", cd.Publish).Methods(http.MethodPost)
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Delete).Methods(http.MethodDelete)
+	protected.HandleFunc("/stories/{id:"+uuidRe+"}/like", ld.Like).Methods(http.MethodPost)
+	protected.HandleFunc("/stories/{id:"+uuidRe+"}/like", ld.Unlike).Methods(http.MethodDelete)
+
 	protected.HandleFunc("/stories/{storyId:"+uuidRe+"}/chapters", cd.CreateUnderStory).Methods(http.MethodPost)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Patch).Methods(http.MethodPatch)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Delete).Methods(http.MethodDelete)
+	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/publish", cd.Publish).Methods(http.MethodPost)
+	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/comments/{commentId:"+uuidRe+"}", comd.Delete).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/profile", authd.UpdateProfile).Methods(http.MethodPatch)
 
 	return middleware.CORS(r)
 }

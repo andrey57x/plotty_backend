@@ -102,6 +102,8 @@ func StatusFromErr(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, named_errors.ErrConflict):
 		return http.StatusConflict
+	case errors.Is(err, named_errors.ErrNoAccess):
+		return http.StatusForbidden
 	default:
 		return http.StatusInternalServerError
 	}

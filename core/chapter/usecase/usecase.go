@@ -15,17 +15,32 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type StoryAuthorChecker interface {
+	CheckAuthorByStory(ctx context.Context, storyID uuid.UUID) error
+	CheckAuthorByChapter(ctx context.Context, chapterID uuid.UUID) error
+}
+
 type Usecase struct {
-	chapters *chapterrepo.Repository
-	stories  *storyrepo.Repository
-	rmqChan  *amqp.Channel
+	chapters    *chapterrepo.Repository
+	stories     *storyrepo.Repository
+	rmqChan     *amqp.Channel
+	authChecker StoryAuthorChecker
 }
 
 func New(chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel) *Usecase {
 	return &Usecase{chapters: chapters, stories: stories, rmqChan: rmqChan}
 }
 
+func (u *Usecase) SetAuthorChecker(checker StoryAuthorChecker) {
+	u.authChecker = checker
+}
+
 func (u *Usecase) Create(ctx context.Context, storyID uuid.UUID, title, content string) (*models.Chapter, error) {
+	if u.authChecker != nil {
+		if err := u.authChecker.CheckAuthorByStory(ctx, storyID); err != nil {
+			return nil, err
+		}
+	}
 	title = strings.TrimSpace(title)
 	if title == "" || strings.TrimSpace(content) == "" {
 		return nil, named_errors.ErrInvalidInput
@@ -37,6 +52,11 @@ func (u *Usecase) Create(ctx context.Context, storyID uuid.UUID, title, content 
 }
 
 func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, content *string) (*models.Chapter, error) {
+	if u.authChecker != nil {
+		if err := u.authChecker.CheckAuthorByChapter(ctx, id); err != nil {
+			return nil, err
+		}
+	}
 	if content != nil {
 		c := strings.TrimSpace(*content)
 		if c == "" {
@@ -72,17 +92,27 @@ func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*ChapterWithImage, err
 }
 
 func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
+	if u.authChecker != nil {
+		if err := u.authChecker.CheckAuthorByChapter(ctx, id); err != nil {
+			return err
+		}
+	}
 	return u.chapters.Delete(ctx, id)
 }
 
 func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
+	if u.authChecker != nil {
+		if err := u.authChecker.CheckAuthorByChapter(ctx, chapterID); err != nil {
+			return err
+		}
+	}
 	ch, err := u.chapters.GetByID(ctx, chapterID)
 	if err != nil {
 		return err
 	}
 
 	if ch.Status == "published" {
-		return nil // Уже опубликовано
+		return nil
 	}
 
 	// 1. Публикуем главу

@@ -21,6 +21,7 @@ type AuthRepository interface {
 	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
 	CreateUser(ctx context.Context, email, passwordHash string) (*models.User, error)
 	GetUserByID(ctx context.Context, userID uint64) (*models.User, error)
+	UpdateUser(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error)
 }
 
 func New(repo AuthRepository) *AuthUsecase {
@@ -90,6 +91,10 @@ func (u *AuthUsecase) Logout(ctx context.Context, sessionID string) error {
 	}
 
 	return nil
+}
+
+func (u *AuthUsecase) UpdateProfile(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error) {
+	return u.Repository.UpdateUser(ctx, userID, username, avatarURL)
 }
 
 func (u *AuthUsecase) GetUserBySession(ctx context.Context, sessionID string) (*models.User, error) {

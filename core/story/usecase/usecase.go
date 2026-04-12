@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
+	"github.com/fivecode/plotty/core/middleware"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
 	"github.com/fivecode/plotty/core/slug"
@@ -72,6 +73,14 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 	if err != nil {
 		return nil, 0, err
 	}
+	likes, err := u.stories.LikeCounts(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+	authors, err := u.stories.AuthorsForStories(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
 		s, ok := byID[id]
@@ -82,12 +91,18 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 			Story:         s,
 			Tags:          tagsMap[id],
 			ChaptersCount: counts[id],
+			LikesCount:    likes[id],
+			Author:        authors[id],
 		})
 	}
 	return items, total, nil
 }
 
 func (u *Usecase) Create(ctx context.Context, title string, tagIDs []uuid.UUID) (*models.Story, error) {
+	userID, ok := middleware.GetUserID(ctx)
+	if !ok {
+		return nil, named_errors.ErrNoAccess
+	}
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return nil, named_errors.ErrInvalidInput
@@ -98,9 +113,10 @@ func (u *Usecase) Create(ctx context.Context, title string, tagIDs []uuid.UUID) 
 	}
 	base := slug.FromTitle(title)
 	s := models.Story{
-		ID:    uuid.New(),
-		Slug:  base,
-		Title: title,
+		ID:       uuid.New(),
+		Slug:     base,
+		Title:    title,
+		AuthorID: &userID,
 	}
 	for i := 0; i < 12; i++ {
 		if i > 0 {
@@ -118,7 +134,37 @@ func (u *Usecase) Create(ctx context.Context, title string, tagIDs []uuid.UUID) 
 	return nil, named_errors.ErrConflict
 }
 
+func (u *Usecase) checkAuthor(ctx context.Context, storyID uuid.UUID) error {
+	userID, ok := middleware.GetUserID(ctx)
+	if !ok {
+		return named_errors.ErrNoAccess
+	}
+	story, err := u.stories.GetByID(ctx, storyID)
+	if err != nil {
+		return err
+	}
+	if story.AuthorID == nil || *story.AuthorID != userID {
+		return named_errors.ErrNoAccess
+	}
+	return nil
+}
+
+func (u *Usecase) CheckAuthorByChapter(ctx context.Context, chapterID uuid.UUID) error {
+	ch, err := u.chapters.GetByID(ctx, chapterID)
+	if err != nil {
+		return err
+	}
+	return u.checkAuthor(ctx, ch.StoryID)
+}
+
+func (u *Usecase) CheckAuthorByStory(ctx context.Context, storyID uuid.UUID) error {
+	return u.checkAuthor(ctx, storyID)
+}
+
 func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, tagIDs *[]uuid.UUID) (*models.Story, error) {
+	if err := u.checkAuthor(ctx, id); err != nil {
+		return nil, err
+	}
 	if tagIDs != nil {
 		*tagIDs = dedupeUUIDs(*tagIDs)
 		if err := u.tags.ValidateAllExist(ctx, *tagIDs); err != nil {
@@ -141,9 +187,31 @@ func (u *Usecase) GetBySlug(ctx context.Context, storySlug string) (*models.Stor
 	if err != nil {
 		return nil, err
 	}
-	return &models.StoryDetail{Story: *s, Tags: tags, Chapters: chs}, nil
+	likesCount, err := u.stories.LikeCount(ctx, s.ID)
+	if err != nil {
+		return nil, err
+	}
+	author, err := u.stories.GetAuthorForStory(ctx, s.ID)
+	if err != nil {
+		return nil, err
+	}
+	var likedByMe bool
+	if uid, ok := middleware.GetUserID(ctx); ok {
+		likedByMe, _ = u.stories.IsLikedByUser(ctx, s.ID, uid)
+	}
+	return &models.StoryDetail{
+		Story:      *s,
+		Tags:       tags,
+		Chapters:   chs,
+		LikesCount: likesCount,
+		LikedByMe:  likedByMe,
+		Author:     author,
+	}, nil
 }
 
 func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
+	if err := u.checkAuthor(ctx, id); err != nil {
+		return err
+	}
 	return u.stories.Delete(ctx, id)
 }

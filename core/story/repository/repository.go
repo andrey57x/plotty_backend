@@ -31,9 +31,9 @@ func (r *Repository) Create(ctx context.Context, s models.Story, tagIDs []uuid.U
 
 	now := time.Now().UTC()
 	_, err = tx.Exec(ctx, `
-		INSERT INTO stories (id, slug, title, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, s.ID, s.Slug, s.Title, "draft", now, now)
+		INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, s.ID, s.Slug, s.Title, "draft", s.AuthorID, now, now)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -105,9 +105,9 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, title *string, ta
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*models.Story, error) {
 	var s models.Story
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, slug, title, status, ai_summary, created_at, updated_at
+		SELECT id, slug, title, status, author_id, ai_summary, created_at, updated_at
 		FROM stories WHERE id = $1
-	`, id).Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt)
+	`, id).Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AuthorID, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, named_errors.ErrNotFound
 	}
@@ -120,9 +120,9 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*models.Story, 
 func (r *Repository) GetBySlug(ctx context.Context, slug string) (*models.Story, error) {
 	var s models.Story
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, slug, title, status, ai_summary, created_at, updated_at
+		SELECT id, slug, title, status, author_id, ai_summary, created_at, updated_at
 		FROM stories WHERE slug = $1
-	`, slug).Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt)
+	`, slug).Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AuthorID, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, named_errors.ErrNotFound
 	}
@@ -286,7 +286,7 @@ func (r *Repository) LoadStoriesByIDs(ctx context.Context, ids []uuid.UUID) (map
 		return map[uuid.UUID]models.Story{}, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, slug, title, status, ai_summary, created_at, updated_at
+		SELECT id, slug, title, status, author_id, ai_summary, created_at, updated_at
 		FROM stories WHERE id = ANY($1)
 	`, ids)
 	if err != nil {
@@ -296,7 +296,7 @@ func (r *Repository) LoadStoriesByIDs(ctx context.Context, ids []uuid.UUID) (map
 	m := make(map[uuid.UUID]models.Story, len(ids))
 	for rows.Next() {
 		var s models.Story
-		if err := rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Status, &s.AuthorID, &s.AiSummary, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
 		m[s.ID] = s
@@ -356,6 +356,79 @@ func (r *Repository) ChapterCounts(ctx context.Context, storyIDs []uuid.UUID) (m
 
 func (r *Repository) TagsForStory(ctx context.Context, storyID uuid.UUID) ([]models.Tag, error) {
 	m, err := r.TagsForStories(ctx, []uuid.UUID{storyID})
+	if err != nil {
+		return nil, err
+	}
+	return m[storyID], nil
+}
+
+func (r *Repository) LikeCounts(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	out := make(map[uuid.UUID]int)
+	if len(storyIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT story_id, COUNT(*)::int FROM story_likes WHERE story_id = ANY($1) GROUP BY story_id
+	`, storyIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid uuid.UUID
+		var c int
+		if err := rows.Scan(&sid, &c); err != nil {
+			return nil, err
+		}
+		out[sid] = c
+	}
+	return out, rows.Err()
+}
+
+func (r *Repository) LikeCount(ctx context.Context, storyID uuid.UUID) (int, error) {
+	var c int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*)::int FROM story_likes WHERE story_id = $1`, storyID).Scan(&c)
+	return c, err
+}
+
+func (r *Repository) IsLikedByUser(ctx context.Context, storyID uuid.UUID, userID uint64) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM story_likes WHERE story_id = $1 AND user_id = $2)
+	`, storyID, userID).Scan(&exists)
+	return exists, err
+}
+
+func (r *Repository) AuthorsForStories(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]*models.StoryAuthor, error) {
+	out := make(map[uuid.UUID]*models.StoryAuthor)
+	if len(storyIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT s.id, u.id, u.username, u.avatar_url
+		FROM stories s
+		JOIN users u ON u.id = s.author_id
+		WHERE s.id = ANY($1) AND s.author_id IS NOT NULL
+	`, storyIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid uuid.UUID
+		var a models.StoryAuthor
+		var avatar *string
+		if err := rows.Scan(&sid, &a.ID, &a.Username, &avatar); err != nil {
+			return nil, err
+		}
+		a.AvatarURL = avatar
+		out[sid] = &a
+	}
+	return out, rows.Err()
+}
+
+func (r *Repository) GetAuthorForStory(ctx context.Context, storyID uuid.UUID) (*models.StoryAuthor, error) {
+	m, err := r.AuthorsForStories(ctx, []uuid.UUID{storyID})
 	if err != nil {
 		return nil, err
 	}

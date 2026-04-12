@@ -115,9 +115,6 @@ func (d *Delivery) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Опционально: здесь должна быть проверка на то, что текущий юзер — автор истории. 
-	// Но пока просто вызываем UseCase.
-
 	if err := d.uc.Publish(r.Context(), id); err != nil {
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return

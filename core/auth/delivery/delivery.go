@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fivecode/plotty/core/logger"
+	"github.com/fivecode/plotty/core/middleware"
 	"github.com/fivecode/plotty/core/models"
 	namederrors "github.com/fivecode/plotty/core/named_errors"
 	"github.com/fivecode/plotty/core/utilities"
@@ -23,6 +24,7 @@ type AuthUsecase interface {
 	Register(ctx context.Context, email string, password string) (*models.User, string, error)
 	Logout(ctx context.Context, sessionID string) error
 	GetUserBySession(ctx context.Context, sessionID string) (*models.User, error)
+	UpdateProfile(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error)
 }
 
 func New(uc AuthUsecase, sessionDuration time.Duration) *AuthDelivery {
@@ -202,6 +204,42 @@ func (d *AuthDelivery) GetSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get user by session")
 		utilities.WriteError(w, http.StatusInternalServerError, "failed to get session")
+		return
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"user": user,
+	})
+}
+
+type updateProfileRequest struct {
+	Username  *string `json:"username"`
+	AvatarURL *string `json:"avatarUrl"`
+}
+
+func (d *AuthDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		utilities.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req updateProfileRequest
+	if err := utilities.DecodeJSON(r, &req); err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	if req.Username == nil && req.AvatarURL == nil {
+		utilities.WriteError(w, http.StatusBadRequest, "nothing to update")
+		return
+	}
+
+	user, err := d.Usecase.UpdateProfile(r.Context(), userID, req.Username, req.AvatarURL)
+	if err != nil {
+		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to update profile")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
 

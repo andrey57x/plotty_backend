@@ -18,21 +18,43 @@ type Story struct {
 	Slug      string    `json:"slug"`
 	Title     string    `json:"title"`
 	Status    string    `json:"status"`
+	AuthorID  *uint64   `json:"authorId,omitempty"`
 	AiSummary *string   `json:"aiHint,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type StoryAuthor struct {
+	ID        uint64  `json:"id"`
+	Username  string  `json:"username"`
+	AvatarURL *string `json:"avatarUrl,omitempty"`
+}
+
 type StoryListItem struct {
 	Story
-	Tags          []Tag `json:"tags"`
-	ChaptersCount int   `json:"chaptersCount"`
+	Tags          []Tag        `json:"tags"`
+	ChaptersCount int          `json:"chaptersCount"`
+	LikesCount    int          `json:"likesCount"`
+	Author        *StoryAuthor `json:"author,omitempty"`
 }
 
 type StoryDetail struct {
 	Story
-	Tags     []Tag          `json:"tags"`
-	Chapters []ChapterBrief `json:"chapters"`
+	Tags       []Tag          `json:"tags"`
+	Chapters   []ChapterBrief `json:"chapters"`
+	LikesCount int            `json:"likesCount"`
+	LikedByMe  bool           `json:"likedByMe"`
+	Author     *StoryAuthor   `json:"author,omitempty"`
+}
+
+type Comment struct {
+	ID        uuid.UUID `json:"id"`
+	ChapterID uuid.UUID `json:"chapterId"`
+	UserID    uint64    `json:"userId"`
+	Username  string    `json:"username"`
+	AvatarURL *string   `json:"avatarUrl,omitempty"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type ChapterBrief struct {

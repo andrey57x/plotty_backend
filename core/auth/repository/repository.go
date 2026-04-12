@@ -131,6 +131,42 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 	return user, nil
 }
 
+func (r *AuthRepository) UpdateUser(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Msg("updating user profile")
+
+	cur, err := r.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	newUsername := cur.Username
+	if username != nil {
+		newUsername = *username
+	}
+	newAvatar := cur.AvatarURL
+	if avatarURL != nil {
+		if *avatarURL == "" {
+			newAvatar = nil
+		} else {
+			newAvatar = avatarURL
+		}
+	}
+
+	_, err = r.Pool.Exec(ctx, `
+		UPDATE users SET username = $2, avatar_url = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1
+	`, userID, newUsername, newAvatar)
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+			return nil, namederrors.ErrConflict
+		}
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+
+	return r.GetUserByID(ctx, userID)
+}
+
 func (r *AuthRepository) GetUserByID(ctx context.Context, userID uint64) (*models.User, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Msg("getting user by id from PostgreSQL")

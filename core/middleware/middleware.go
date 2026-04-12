@@ -147,6 +147,21 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func OptionalAuthMiddleware(redisDB *redis.RedisDB) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			session, err := r.Cookie("session_id")
+			if err == nil && session.Value != "" {
+				if userID, err := redisDB.GetUserIDBySession(r.Context(), session.Value); err == nil {
+					ctx := WithUserID(r.Context(), userID)
+					r = r.WithContext(ctx)
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func AuthMiddleware(redisDB *redis.RedisDB) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
