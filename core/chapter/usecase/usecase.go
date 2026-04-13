@@ -89,6 +89,20 @@ func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, conte
 		return nil, fmt.Errorf("chapter_uc.Update: %w", err)
 	}
 
+	if ch.Status == "published" && content != nil {
+		loreTask := rabbitmq.MLTaskMessage{
+			TaskID:  uuid.NewString(),
+			TraceID: uuid.NewString(),
+			Type:    "extract_lore",
+			Payload: ch.Content,
+			Metadata: map[string]string{
+				"story_id":   ch.StoryID.String(),
+				"chapter_id": ch.ID.String(),
+			},
+		}
+		u.publishToRabbitMQ(ctx, loreTask)
+	}
+
 	log.Info().Stringer("chapter_id", id).Msg("chapter_uc: updated")
 	return ch, nil
 }
@@ -135,11 +149,6 @@ func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
 	ch, err := u.chapters.GetByID(ctx, chapterID)
 	if err != nil {
 		return fmt.Errorf("chapter_uc.Publish get chapter: %w", err)
-	}
-
-	if ch.Status == "published" {
-		log.Info().Stringer("chapter_id", chapterID).Msg("chapter_uc: already published, skipping")
-		return nil
 	}
 
 	if err := u.chapters.Publish(ctx, chapterID); err != nil {

@@ -23,10 +23,29 @@ func New(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) CreateJob(ctx context.Context, job models.AIJob) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO ai_jobs (id, type, status, story_id, chapter_id, input_payload, result_payload, error_message, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`, job.ID, job.Type, job.Status, job.StoryID, job.ChapterID, job.InputPayload, job.ResultPayload, job.ErrorMessage, job.CreatedAt, job.UpdatedAt)
+		INSERT INTO ai_jobs (id, type, status, story_id, chapter_id, input_payload, result_payload, error_message, content_hash, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`, job.ID, job.Type, job.Status, job.StoryID, job.ChapterID, job.InputPayload, job.ResultPayload, job.ErrorMessage, job.ContentHash, job.CreatedAt, job.UpdatedAt)
 	return err
+}
+
+func (r *Repository) GetCompletedJobByHash(ctx context.Context, chapterID uuid.UUID, jobType, hash string) (*models.AIJob, error) {
+	var j models.AIJob
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, type, status, story_id, chapter_id, input_payload, result_payload, error_message, content_hash, created_at, updated_at
+		FROM ai_jobs 
+		WHERE chapter_id = $1 AND type = $2 AND content_hash = $3 AND status = 'completed'
+		ORDER BY created_at DESC LIMIT 1
+	`, chapterID, jobType, hash).Scan(
+		&j.ID, &j.Type, &j.Status, &j.StoryID, &j.ChapterID, &j.InputPayload, &j.ResultPayload, &j.ErrorMessage, &j.ContentHash, &j.CreatedAt, &j.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, named_errors.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &j, nil
 }
 
 func (r *Repository) UpdateJob(ctx context.Context, id uuid.UUID, status string, result []byte, errMsg *string) error {
@@ -47,10 +66,10 @@ func (r *Repository) UpdateJob(ctx context.Context, id uuid.UUID, status string,
 func (r *Repository) GetJob(ctx context.Context, id uuid.UUID) (*models.AIJob, error) {
 	var j models.AIJob
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, type, status, story_id, chapter_id, input_payload, result_payload, error_message, created_at, updated_at
+		SELECT id, type, status, story_id, chapter_id, input_payload, result_payload, error_message, content_hash, created_at, updated_at
 		FROM ai_jobs WHERE id = $1
 	`, id).Scan(
-		&j.ID, &j.Type, &j.Status, &j.StoryID, &j.ChapterID, &j.InputPayload, &j.ResultPayload, &j.ErrorMessage, &j.CreatedAt, &j.UpdatedAt,
+		&j.ID, &j.Type, &j.Status, &j.StoryID, &j.ChapterID, &j.InputPayload, &j.ResultPayload, &j.ErrorMessage, &j.ContentHash, &j.CreatedAt, &j.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, named_errors.ErrNotFound

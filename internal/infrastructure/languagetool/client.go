@@ -14,11 +14,16 @@ type CheckResponse struct {
 	Matches []Match `json:"matches"`
 }
 
+type Rule struct {
+	ID string `json:"id"`
+}
+
 type Match struct {
 	Message      string        `json:"message"`
 	Offset       int           `json:"offset"`
 	Length       int           `json:"length"`
 	Replacements []Replacement `json:"replacements"`
+	Rule         Rule          `json:"rule"`
 }
 
 type Replacement struct {

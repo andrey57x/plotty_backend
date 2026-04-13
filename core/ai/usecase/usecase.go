@@ -2,6 +2,8 @@ package usecase
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -29,6 +31,11 @@ func New(jobs *repository.Repository, chapters *chapterrepo.Repository, stories 
 	return &Usecase{jobs: jobs, chapters: chapters, stories: stories, rmqChan: rmqChan}
 }
 
+func sha256Hex(data string) string {
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
+
 type spellcheckInput struct {
 	ChapterID string `json:"chapterId"`
 	Content   string `json:"content"`
@@ -50,6 +57,12 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, cont
 		return uuid.Nil, named_errors.ErrInvalidInput
 	}
 
+	contentHash := sha256Hex(text)
+
+	if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeSpellcheck, contentHash); err == nil {
+		return cachedJob.ID, nil
+	}
+
 	payloadBytes, _ := json.Marshal(spellcheckInput{ChapterID: chapterID.String(), Content: text})
 	jobID := uuid.New()
 	now := time.Now().UTC()
@@ -61,6 +74,7 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, cont
 		ChapterID:    &ch.ID,
 		StoryID:      &ch.StoryID,
 		InputPayload: payloadBytes,
+		ContentHash:  &contentHash,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -92,6 +106,12 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID,
 		return uuid.Nil, named_errors.ErrInvalidInput
 	}
 
+	contentHash := sha256Hex(content + "|" + prompt)
+
+	if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeImageGeneration, contentHash); err == nil {
+		return cachedJob.ID, nil
+	}
+
 	payloadBytes, _ := json.Marshal(imageGenInput{
 		ChapterID: chapterID.String(),
 		Content:   content,
@@ -107,6 +127,7 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID,
 		ChapterID:    &ch.ID,
 		StoryID:      &ch.StoryID,
 		InputPayload: payloadBytes,
+		ContentHash:  &contentHash,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -118,6 +139,70 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID,
 		TaskID:  jobID.String(),
 		Type:    "image_gen",
 		Payload: string(payloadBytes),
+	}
+	body, _ := json.Marshal(task)
+	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
+
+	return jobID, nil
+}
+
+func (u *Usecase) StartLogicCheck(ctx context.Context, chapterID uuid.UUID, content string) (uuid.UUID, error) {
+	ch, err := u.chapters.GetByID(ctx, chapterID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	text := strings.TrimSpace(content)
+	if text == "" {
+		return uuid.Nil, named_errors.ErrInvalidInput
+	}
+
+	contentHash := sha256Hex(text)
+
+	if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeLogicCheck, contentHash); err == nil {
+		return cachedJob.ID, nil
+	}
+
+	briefs, _ := u.chapters.ListBriefByStory(ctx, ch.StoryID)
+	var prevIDs []string
+	for _, b := range briefs {
+		if b.ID == chapterID {
+			break
+		}
+		if b.Status == "published" {
+			prevIDs = append(prevIDs, b.ID.String())
+		}
+	}
+
+	jobID := uuid.New()
+	now := time.Now().UTC()
+
+	job := models.AIJob{
+		ID:           jobID,
+		Type:         constants.AIJobTypeLogicCheck,
+		Status:       constants.AIJobStatusProcessing,
+		ChapterID:    &ch.ID,
+		StoryID:      &ch.StoryID,
+		InputPayload: []byte(`{"chapterId":"` + chapterID.String() + `"}`),
+		ContentHash:  &contentHash,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := u.jobs.CreateJob(ctx, job); err != nil {
+		return uuid.Nil, err
+	}
+
+	task := rabbitmq.MLTaskMessage{
+		TaskID:  jobID.String(),
+		TraceID: uuid.NewString(),
+		Type:    "logic_check",
+		Payload: text,
+		Metadata: map[string]string{
+			"story_id":         ch.StoryID.String(),
+			"prev_chapter_ids": strings.Join(prevIDs, ","),
+		},
 	}
 	body, _ := json.Marshal(task)
 	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
@@ -230,49 +315,4 @@ func (u *Usecase) GetJobView(ctx context.Context, jobID uuid.UUID) (map[string]a
 		}
 	}
 	return out, nil
-}
-
-func (u *Usecase) StartLogicCheck(ctx context.Context, chapterID uuid.UUID, content string) (uuid.UUID, error) {
-	ch, err := u.chapters.GetByID(ctx, chapterID)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	text := strings.TrimSpace(content)
-	if text == "" {
-		return uuid.Nil, named_errors.ErrInvalidInput
-	}
-
-	jobID := uuid.New()
-	now := time.Now().UTC()
-
-	job := models.AIJob{
-		ID:           jobID,
-		Type:         constants.AIJobTypeLogicCheck,
-		Status:       constants.AIJobStatusProcessing,
-		ChapterID:    &ch.ID,
-		StoryID:      &ch.StoryID,
-		InputPayload: []byte(`{"chapterId":"` + chapterID.String() + `"}`),
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	}
-	if err := u.jobs.CreateJob(ctx, job); err != nil {
-		return uuid.Nil, err
-	}
-
-	task := rabbitmq.MLTaskMessage{
-		TaskID:  jobID.String(),
-		TraceID: uuid.NewString(),
-		Type:    "logic_check",
-		Payload: text,
-		Metadata: map[string]string{
-			"story_id": ch.StoryID.String(),
-		},
-	}
-	body, _ := json.Marshal(task)
-	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
-		ContentType: "application/json",
-		Body:        body,
-	})
-
-	return jobID, nil
 }

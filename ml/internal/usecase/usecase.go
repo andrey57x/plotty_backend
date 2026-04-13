@@ -3,6 +3,8 @@ package usecase
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -81,6 +83,11 @@ func (u *AIUsecase) publishResult(ctx context.Context, task sharedrmq.MLTaskMess
 	})
 }
 
+func sha256Hex(data string) string {
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
+
 func (u *AIUsecase) ProcessSpellcheck(ctx context.Context, task sharedrmq.MLTaskMessage) error {
 	taskID, _ := uuid.Parse(task.TaskID)
 	var input struct {
@@ -110,6 +117,10 @@ func (u *AIUsecase) ProcessMLTask(ctx context.Context, task sharedrmq.MLTaskMess
 		return u.processGenerateSummary(ctx, task)
 	case "logic_check":
 		return u.processLogicCheck(ctx, task)
+	case "delete_story_lore":
+		storyID, _ := uuid.Parse(task.Metadata["story_id"])
+		_ = u.repo.DeleteStoryLore(ctx, storyID)
+		return nil
 	default:
 		return fmt.Errorf("unknown ml task type: %s", task.Type)
 	}
@@ -165,19 +176,15 @@ func cleanJSON(input string) string {
 	return strings.TrimSpace(input)
 }
 
-const loreSystemPrompt = `Ты — аналитик сюжета. Анализируй текст и извлекай факты.
-У тебя есть "Текущий лор" (в формате JSON) и "Текст новой главы".
-Твоя задача: ДОПОЛНИТЬ текущий лор.
-1. Добавь новых персонажей/предметы/локации.
-2. Измени состояние существующих, если в тексте что-то произошло.
-3. ВАЖНО: НИКОГДА НЕ УДАЛЯЙ персонажей, локации и предметы из старого лора, даже если они не упоминаются в новой главе! Просто оставь их как есть.
-Верни результат СТРОГО в формате JSON следующей структуры:
+const loreSystemPrompt = `Ты — анализатор текста. 
+Твоя задача: прочитать предоставленный текст главы и извлечь информацию о персонажах, локациях и предметах.
+Отвечай СТРОГО в формате JSON. НИКАКИХ вводных слов.
+Структура:
 {
-  "characters":[{"name": "Имя", "state": "Текущее состояние"}],
-  "locations":[{"name": "Название", "state": "Описание"}],
-  "items":[{"name": "Предмет", "state": "Состояние"}]
-}
-Не пиши ничего кроме JSON-объекта!`
+  "characters":[{"name": "Имя", "state": "События, описание, состояние в этой главе"}],
+  "locations":[{"name": "Название", "state": "Описание из этой главы"}],
+  "items":[{"name": "Предмет", "state": "Состояние из этой главы"}]
+}`
 
 func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTaskMessage) error {
 	taskID, _ := uuid.Parse(task.TaskID)
@@ -186,30 +193,26 @@ func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTas
 
 	_ = u.repo.CreateTask(ctx, taskID, "extract_lore", "story_id: "+storyID.String())
 
-	// 1. Получаем текущий лор
-	currentLore, err := u.repo.GetLorebook(ctx, storyID)
-	if err != nil {
-		return u.publishResult(ctx, task, "failed", nil, "failed to get current lore: "+err.Error())
+	contentHash := sha256Hex(task.Payload)
+	lastHash, _ := u.repo.GetChapterLoreHash(ctx, chapterID)
+	if lastHash == contentHash {
+		return u.publishResult(ctx, task, "completed", nil, "")
 	}
 
-	// 2. Формируем запрос
-	userPrompt := fmt.Sprintf("Текущий лор: %s\n\nТекст новой главы:\n%s", currentLore, task.Payload)
+	userPrompt := "Текст главы:\n" + task.Payload
 
-	// 3. Отправляем в GigaChat
 	llmResponse, err := u.llm.SendChat(loreSystemPrompt, userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
 
-	// 4. Очищаем JSON и проверяем валидность
 	cleanJSONStr := cleanJSON(llmResponse)
 	if !json.Valid([]byte(cleanJSONStr)) {
-		return u.publishResult(ctx, task, "failed", nil, "gigachat returned invalid JSON: "+cleanJSONStr)
+		return u.publishResult(ctx, task, "failed", nil, "gigachat returned invalid JSON")
 	}
 
-	// 5. Сохраняем в БД ML
-	if err := u.repo.UpsertLorebook(ctx, storyID, chapterID, cleanJSONStr); err != nil {
-		return u.publishResult(ctx, task, "failed", nil, "failed to save lore: "+err.Error())
+	if err := u.repo.UpsertChapterLorebook(ctx, chapterID, storyID, contentHash, cleanJSONStr); err != nil {
+		return u.publishResult(ctx, task, "failed", nil, "failed to save chapter lore: "+err.Error())
 	}
 
 	return u.publishResult(ctx, task, "completed", json.RawMessage(cleanJSONStr), "")
@@ -218,7 +221,7 @@ func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTas
 const summarySystemPrompt = `Ты — профессиональный книжный редактор. 
 Напиши интригующее описание (аннотацию) для истории на основе текста первой главы. 
 Опиши завязку, атмосферу и главного героя. НЕ раскрывай сюжетные повороты, интригу и концовку!
-Максимум 3-4 предложения. Отвечай только текстом аннотации.`
+Максимум 3-4 предложения, не больше 180 символов. Отвечай только текстом аннотации.`
 
 func (u *AIUsecase) processGenerateSummary(ctx context.Context, task sharedrmq.MLTaskMessage) error {
 	taskID, _ := uuid.Parse(task.TaskID)
@@ -226,16 +229,13 @@ func (u *AIUsecase) processGenerateSummary(ctx context.Context, task sharedrmq.M
 
 	_ = u.repo.CreateTask(ctx, taskID, "generate_summary", "story_id: "+storyID.String())
 
-	// Отправляем текст 1-ой главы в GigaChat
 	summary, err := u.llm.SendChat(summarySystemPrompt, "Текст первой главы:\n"+task.Payload)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
 
-	// Очищаем от возможных кавычек
 	summary = strings.TrimSpace(summary)
 
-	// Сохраняем Summary в БД
 	if err := u.repo.UpdateSummary(ctx, storyID, summary); err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "failed to save summary: "+err.Error())
 	}
@@ -243,15 +243,17 @@ func (u *AIUsecase) processGenerateSummary(ctx context.Context, task sharedrmq.M
 	return u.publishResult(ctx, task, "completed", map[string]string{"summary": summary}, "")
 }
 
-const logicSystemPrompt = `Ты — строгий бета-ридер. Твоя цель — найти логические нестыковки в новом тексте главы, основываясь на лоре (базе знаний) предыдущих глав.
-ЛОР:
+const logicSystemPrompt = `Ты — строгий бета-ридер. Твоя цель — найти логические нестыковки в тексте НОВОЙ главы, основываясь на ЛОРе предыдущих глав.
+ОТВЕЧАЙ СТРОГО ПО ДЕЛУ. БЕЗ ВВОДНЫХ СЛОВ. БЕЗ СМАЙЛИКОВ И ЭМОДЗИ (никаких крестиков или галочек). БЕЗ МАРКДАУН ФОРМАТИРОВАНИЯ (без звездочек, жирного текста, решеток). ТОЛЬКО ОБЫЧНЫЙ ТЕКСТ.
+
+ЛОР ПРЕДЫДУЩИХ ГЛАВ:
 %s
 
 ТЕКСТ НОВОЙ ГЛАВЫ:
 %s
 
-Если есть противоречия (например, используется сломанный предмет, персонаж находится в двух местах одновременно, воскрес мертвый и т.д.), перечисли их списком с объяснением, почему это нелогично.
-Если противоречий нет, ответь коротко: "Логических нестыковок не найдено."`
+Если есть противоречия, перечисли их простым нумерованным списком с кратким объяснением.
+Если противоречий нет, ответь ровно одной фразой (без точки в конце): Логических нестыковок не найдено`
 
 func (u *AIUsecase) processLogicCheck(ctx context.Context, task sharedrmq.MLTaskMessage) error {
 	taskID, _ := uuid.Parse(task.TaskID)
@@ -259,30 +261,38 @@ func (u *AIUsecase) processLogicCheck(ctx context.Context, task sharedrmq.MLTask
 
 	_ = u.repo.CreateTask(ctx, taskID, "logic_check", "story_id: "+storyID.String())
 
-	// 1. Получаем текущий лор
-	currentLore, err := u.repo.GetLorebook(ctx, storyID)
-	if err != nil {
-		return u.publishResult(ctx, task, "failed", nil, "failed to get current lore: "+err.Error())
+	prevIDsStr := task.Metadata["prev_chapter_ids"]
+	var prevChapterIDs []uuid.UUID
+	if prevIDsStr != "" {
+		for _, idStr := range strings.Split(prevIDsStr, ",") {
+			if id, err := uuid.Parse(idStr); err == nil {
+				prevChapterIDs = append(prevChapterIDs, id)
+			}
+		}
 	}
 
-	// Если лор пустой (история еще ни разу не публиковалась)
-	if currentLore == "{}" || currentLore == "" {
+	currentLore, err := u.repo.GetMergedLore(ctx, prevChapterIDs)
+	if err != nil {
+		return u.publishResult(ctx, task, "failed", nil, "failed to merge lore: "+err.Error())
+	}
+
+	if len(prevChapterIDs) == 0 || currentLore == "{}" || currentLore == "" {
 		return u.publishResult(ctx, task, "completed", map[string]string{
-			"message": "База знаний еще пуста (нет опубликованных глав). Логику пока проверять не на чем.",
+			"message": "Для этой главы нет предыдущего опубликованного лора. Не с чем сравнивать.",
 		}, "")
 	}
 
-	// 2. Формируем промпт
 	userPrompt := fmt.Sprintf(logicSystemPrompt, currentLore, task.Payload)
 
-	// 3. Отправляем в GigaChat
-	llmResponse, err := u.llm.SendChat("Ты — строгий бета-ридер. Отвечай только на русском языке.", userPrompt)
+	llmResponse, err := u.llm.SendChat("Ты — строгий бета-ридер. Отвечай только на русском языке, без форматирования и эмодзи.", userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
 
-	// 4. Возвращаем результат
+	cleanResponse := strings.ReplaceAll(llmResponse, "**", "")
+	cleanResponse = strings.ReplaceAll(cleanResponse, "*", "")
+
 	return u.publishResult(ctx, task, "completed", map[string]string{
-		"message": strings.TrimSpace(llmResponse),
+		"message": strings.TrimSpace(cleanResponse),
 	}, "")
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/fivecode/plotty/core/slug"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
 	tagrepo "github.com/fivecode/plotty/core/tag/repository"
+	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/google/uuid"
 )
 
@@ -256,5 +257,17 @@ func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("story_uc.Delete: %w", err)
 	}
 	logger.Ctx(ctx).Info().Stringer("story_id", id).Msg("story_uc: deleted")
+
+	_ = rabbitmq.MLTaskMessage{
+		TaskID:  uuid.NewString(),
+		TraceID: uuid.NewString(),
+		Type:    "delete_story_lore",
+		Metadata: map[string]string{
+			"story_id": id.String(),
+		},
+	}
+
+	// TODO: delete chapters
+	
 	return nil
 }

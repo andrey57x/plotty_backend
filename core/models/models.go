@@ -83,6 +83,7 @@ type AIJob struct {
 	InputPayload  []byte
 	ResultPayload []byte
 	ErrorMessage  *string
+	ContentHash   *string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
