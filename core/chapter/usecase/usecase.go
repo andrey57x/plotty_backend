@@ -117,6 +117,11 @@ func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*ChapterWithImage, err
 	if err != nil {
 		return nil, fmt.Errorf("chapter_uc.Get: %w", err)
 	}
+	if ch.Status != "published" && u.authChecker != nil {
+		if err := u.authChecker.CheckAuthorByChapter(ctx, id); err != nil {
+			return nil, err
+		}
+	}
 	imgURL, err := u.chapters.GetLatestImageURL(ctx, id)
 	if err != nil {
 		logger.Ctx(ctx).Error().Err(err).Stringer("chapter_id", id).Msg("chapter_uc: get image url failed")

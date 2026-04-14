@@ -112,6 +112,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected := api.NewRoute().Subrouter()
 	protected.Use(middleware.AuthMiddleware(redisDB))
 
+	protected.HandleFunc("/stories/mine", sd.ListMy).Methods(http.MethodGet)
 	protected.HandleFunc("/stories", sd.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Patch).Methods(http.MethodPatch)
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Delete).Methods(http.MethodDelete)

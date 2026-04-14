@@ -113,6 +113,85 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 	return items, total, nil
 }
 
+func (u *Usecase) ListMy(ctx context.Context, q string, tagSlugs []string, page, pageSize int) ([]models.StoryListItem, int, error) {
+	log := logger.FromContext(ctx)
+
+	userID, ok := middleware.GetUserID(ctx)
+	if !ok {
+		log.Warn().Msg("story_uc: list_my without auth")
+		return nil, 0, named_errors.ErrNoAccess
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	offset := (page - 1) * pageSize
+
+	total, err := u.stories.CountMyList(ctx, userID, q, tagSlugs)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: CountMyList failed")
+		return nil, 0, fmt.Errorf("story_uc.ListMy count: %w", err)
+	}
+	ids, err := u.stories.ListMyIDs(ctx, userID, q, tagSlugs, pageSize, offset)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: ListMyIDs failed")
+		return nil, 0, fmt.Errorf("story_uc.ListMy ids: %w", err)
+	}
+	if len(ids) == 0 {
+		return []models.StoryListItem{}, total, nil
+	}
+
+	byID, err := u.stories.LoadStoriesByIDs(ctx, ids)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: LoadStoriesByIDs failed")
+		return nil, 0, fmt.Errorf("story_uc.ListMy load: %w", err)
+	}
+	tagsMap, err := u.stories.TagsForStories(ctx, ids)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: TagsForStories failed")
+		return nil, 0, fmt.Errorf("story_uc.ListMy tags: %w", err)
+	}
+	counts, err := u.stories.ChapterCounts(ctx, ids)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: ChapterCounts failed")
+		return nil, 0, fmt.Errorf("story_uc.ListMy chapter counts: %w", err)
+	}
+	likes, err := u.stories.LikeCounts(ctx, ids)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: LikeCounts failed")
+		return nil, 0, fmt.Errorf("story_uc.ListMy likes: %w", err)
+	}
+	authors, err := u.stories.AuthorsForStories(ctx, ids)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: AuthorsForStories failed")
+		return nil, 0, fmt.Errorf("story_uc.ListMy authors: %w", err)
+	}
+
+	items := make([]models.StoryListItem, 0, len(ids))
+	for _, id := range ids {
+		s, ok := byID[id]
+		if !ok {
+			continue
+		}
+		items = append(items, models.StoryListItem{
+			Story:         s,
+			Tags:          tagsMap[id],
+			ChaptersCount: counts[id],
+			LikesCount:    likes[id],
+			Author:        authors[id],
+		})
+	}
+
+	log.Info().Uint64("user_id", userID).Int("total", total).Int("returned", len(items)).Msg("story_uc: list_my ok")
+	return items, total, nil
+}
+
 func (u *Usecase) Create(ctx context.Context, title string, tagIDs []uuid.UUID) (*models.Story, error) {
 	log := logger.FromContext(ctx)
 
@@ -214,6 +293,11 @@ func (u *Usecase) GetBySlug(ctx context.Context, storySlug string) (*models.Stor
 	s, err := u.stories.GetBySlug(ctx, storySlug)
 	if err != nil {
 		return nil, fmt.Errorf("story_uc.GetBySlug story: %w", err)
+	}
+	if s.Status != "published" {
+		if err := u.checkAuthor(ctx, s.ID); err != nil {
+			return nil, err
+		}
 	}
 	tags, err := u.stories.TagsForStory(ctx, s.ID)
 	if err != nil {

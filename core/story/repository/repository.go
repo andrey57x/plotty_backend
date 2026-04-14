@@ -247,6 +247,7 @@ func (r *Repository) ListIDs(ctx context.Context, q string, tagSlugs []string, l
 		SELECT s.id
 		FROM stories s
 		WHERE ($1 = '' OR s.title ILIKE '%%' || $1 || '%%')
+		AND s.status = 'published'
 		%s
 		ORDER BY s.updated_at DESC
 		LIMIT $2 OFFSET $3
@@ -299,11 +300,107 @@ func (r *Repository) CountList(ctx context.Context, q string, tagSlugs []string)
 		SELECT COUNT(*)::int
 		FROM stories s
 		WHERE ($1 = '' OR s.title ILIKE '%%' || $1 || '%%')
+		AND s.status = 'published'
 		%s
 	`, whereTags), args...).Scan(&total)
 	if err != nil {
 		logger.Ctx(ctx).Error().Err(err).Msg("story_repo: CountList failed")
 		return 0, fmt.Errorf("story_repo.CountList: %w", err)
+	}
+	return total, nil
+}
+
+func (r *Repository) ListMyIDs(ctx context.Context, userID uint64, q string, tagSlugs []string, limit, offset int) ([]uuid.UUID, error) {
+	tagSlugs = dedupeStrings(tagSlugs)
+	groups, found, err := r.groupTagSlugsByCategory(ctx, tagSlugs)
+	if err != nil {
+		return nil, err
+	}
+	if len(tagSlugs) > 0 && found != len(tagSlugs) {
+		return []uuid.UUID{}, nil
+	}
+
+	args := []any{userID, q, limit, offset}
+	whereTags := ""
+	if len(groups) > 0 {
+		for _, slugs := range groups {
+			args = append(args, slugs)
+			ph := len(args)
+			whereTags += fmt.Sprintf(`
+				AND EXISTS (
+					SELECT 1
+					FROM story_tags st
+					JOIN tags tg ON tg.id = st.tag_id
+					WHERE st.story_id = s.id AND tg.slug = ANY($%d::text[])
+				)
+			`, ph)
+		}
+	}
+
+	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
+		SELECT s.id
+		FROM stories s
+		WHERE s.author_id = $1
+		AND ($2 = '' OR s.title ILIKE '%%' || $2 || '%%')
+		%s
+		ORDER BY s.updated_at DESC
+		LIMIT $3 OFFSET $4
+	`, whereTags), args...)
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Uint64("user_id", userID).Msg("story_repo: ListMyIDs query failed")
+		return nil, fmt.Errorf("story_repo.ListMyIDs: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("story_repo.ListMyIDs scan: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (r *Repository) CountMyList(ctx context.Context, userID uint64, q string, tagSlugs []string) (int, error) {
+	tagSlugs = dedupeStrings(tagSlugs)
+	groups, found, err := r.groupTagSlugsByCategory(ctx, tagSlugs)
+	if err != nil {
+		return 0, err
+	}
+	if len(tagSlugs) > 0 && found != len(tagSlugs) {
+		return 0, nil
+	}
+
+	args := []any{userID, q}
+	whereTags := ""
+	if len(groups) > 0 {
+		for _, slugs := range groups {
+			args = append(args, slugs)
+			ph := len(args)
+			whereTags += fmt.Sprintf(`
+				AND EXISTS (
+					SELECT 1
+					FROM story_tags st
+					JOIN tags tg ON tg.id = st.tag_id
+					WHERE st.story_id = s.id AND tg.slug = ANY($%d::text[])
+				)
+			`, ph)
+		}
+	}
+
+	var total int
+	err = r.pool.QueryRow(ctx, fmt.Sprintf(`
+		SELECT COUNT(*)::int
+		FROM stories s
+		WHERE s.author_id = $1
+		AND ($2 = '' OR s.title ILIKE '%%' || $2 || '%%')
+		%s
+	`, whereTags), args...).Scan(&total)
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Uint64("user_id", userID).Msg("story_repo: CountMyList failed")
+		return 0, fmt.Errorf("story_repo.CountMyList: %w", err)
 	}
 	return total, nil
 }

@@ -77,6 +77,35 @@ func (d *Delivery) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (d *Delivery) ListMy(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page == 0 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if pageSize == 0 {
+		pageSize = 20
+	}
+
+	items, total, err := d.uc.ListMy(r.Context(), q, parseTagSlugs(r), page, pageSize)
+	if err != nil {
+		log.Warn().Err(err).Msg("story_delivery: list_my failed")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+	utilities.WriteJSON(w, http.StatusOK, map[string]any{
+		"items": items,
+		"pagination": map[string]any{
+			"page":     page,
+			"pageSize": pageSize,
+			"total":    total,
+		},
+	})
+}
+
 type createStoryBody struct {
 	Title  string      `json:"title"`
 	TagIDs []uuid.UUID `json:"tagIds"`
