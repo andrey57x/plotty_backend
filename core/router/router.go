@@ -97,17 +97,6 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	api.HandleFunc("/session", authd.GetSession).Methods(http.MethodGet)
 
 	api.HandleFunc("/stories", sd.List).Methods(http.MethodGet)
-	api.HandleFunc("/stories/{slug}", sd.GetBySlug).Methods(http.MethodGet)
-
-	api.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Get).Methods(http.MethodGet)
-	api.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.List).Methods(http.MethodGet)
-
-	api.HandleFunc("/tags", td.List).Methods(http.MethodGet)
-
-	api.HandleFunc("/ai/spellcheck", ad.Spellcheck).Methods(http.MethodPost)
-	api.HandleFunc("/ai/image-generation", ad.ImageGeneration).Methods(http.MethodPost)
-	api.HandleFunc("/ai/logic-check", ad.LogicCheck).Methods(http.MethodPost)
-	api.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
 
 	protected := api.NewRoute().Subrouter()
 	protected.Use(middleware.AuthMiddleware(redisDB))
@@ -127,6 +116,18 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected.HandleFunc("/comments/{commentId:"+uuidRe+"}", comd.Delete).Methods(http.MethodDelete)
 
 	protected.HandleFunc("/profile", authd.UpdateProfile).Methods(http.MethodPatch)
+
+	api.HandleFunc("/stories/{slug}", sd.GetBySlug).Methods(http.MethodGet)
+
+	api.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Get).Methods(http.MethodGet)
+	api.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.List).Methods(http.MethodGet)
+
+	api.HandleFunc("/tags", td.List).Methods(http.MethodGet)
+
+	api.HandleFunc("/ai/spellcheck", ad.Spellcheck).Methods(http.MethodPost)
+	api.HandleFunc("/ai/image-generation", ad.ImageGeneration).Methods(http.MethodPost)
+	api.HandleFunc("/ai/logic-check", ad.LogicCheck).Methods(http.MethodPost)
+	api.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
 
 	return middleware.CORS(r)
 }
