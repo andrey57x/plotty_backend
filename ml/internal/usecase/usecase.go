@@ -31,20 +31,33 @@ type FileStorage interface {
 	Upload(ctx context.Context, fileName string, reader io.Reader, size int64, contentType string) (string, error)
 }
 
+type EmbeddingsProvider interface {
+	GetEmbedding(ctx context.Context, text string) ([]float32, error)
+}
+
 type AIUsecase struct {
 	repo         repository.MLRepository
 	spellchecker Spellchecker
 	llm          LLMProvider
 	storage      FileStorage
+	embeddings   EmbeddingsProvider
 	rmqChan      *amqp.Channel
 }
 
-func NewAIUsecase(repo repository.MLRepository, sp Spellchecker, llm LLMProvider, st FileStorage, rmqChan *amqp.Channel) *AIUsecase {
+func NewAIUsecase(
+	repo repository.MLRepository,
+	sp Spellchecker,
+	llm LLMProvider,
+	st FileStorage,
+	emb EmbeddingsProvider,
+	rmqChan *amqp.Channel,
+) *AIUsecase {
 	return &AIUsecase{
 		repo:         repo,
 		spellchecker: sp,
 		llm:          llm,
 		storage:      st,
+		embeddings:   emb,
 		rmqChan:      rmqChan,
 	}
 }
@@ -121,6 +134,8 @@ func (u *AIUsecase) ProcessMLTask(ctx context.Context, task sharedrmq.MLTaskMess
 		storyID, _ := uuid.Parse(task.Metadata["story_id"])
 		_ = u.repo.DeleteStoryLore(ctx, storyID)
 		return nil
+	case "canon_check":
+		return u.processCanonCheck(ctx, task)
 	default:
 		return fmt.Errorf("unknown ml task type: %s", task.Type)
 	}
@@ -176,20 +191,21 @@ func cleanJSON(input string) string {
 	return strings.TrimSpace(input)
 }
 
-const loreSystemPrompt = `Ты — анализатор текста. 
-Твоя задача: прочитать предоставленный текст главы и извлечь информацию о персонажах, локациях и предметах.
-Отвечай СТРОГО в формате JSON. НИКАКИХ вводных слов.
+const iterativeLoreSystemPrompt = `Ты — анализатор лора. Твоя задача: прочитать состояние мира (ЛОР) до текущей главы и текст новой главы. 
+ОБНОВИ состояние мира. Добавь новые детали, измени состояние существующих персонажей/предметов, если с ними что-то случилось. 
+Отвечай СТРОГО в формате JSON.
 Структура:
 {
-  "characters":[{"name": "Имя", "state": "События, описание, состояние в этой главе"}],
-  "locations":[{"name": "Название", "state": "Описание из этой главы"}],
-  "items":[{"name": "Предмет", "state": "Состояние из этой главы"}]
+  "characters":[{"name": "Имя", "state": "Текущее состояние и факты"}],
+  "locations":[{"name": "Название", "state": "Текущее состояние и факты"}],
+  "items":[{"name": "Предмет", "state": "Текущее состояние и факты"}]
 }`
 
 func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTaskMessage) error {
 	taskID, _ := uuid.Parse(task.TaskID)
 	storyID, _ := uuid.Parse(task.Metadata["story_id"])
 	chapterID, _ := uuid.Parse(task.Metadata["chapter_id"])
+	prevChapterIDStr := task.Metadata["prev_chapter_id"]
 
 	_ = u.repo.CreateTask(ctx, taskID, "extract_lore", "story_id: "+storyID.String())
 
@@ -199,9 +215,19 @@ func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTas
 		return u.publishResult(ctx, task, "completed", nil, "")
 	}
 
-	userPrompt := "Текст главы:\n" + task.Payload
+	var prevLore string = "{}"
+	if prevChapterIDStr != "" {
+		if prevID, err := uuid.Parse(prevChapterIDStr); err == nil {
+			lore, err := u.repo.GetLoreByChapterID(ctx, prevID)
+			if err == nil && lore != "" {
+				prevLore = lore
+			}
+		}
+	}
 
-	llmResponse, err := u.llm.SendChat(loreSystemPrompt, userPrompt)
+	userPrompt := fmt.Sprintf("ЛОР ДО ЭТОЙ ГЛАВЫ:\n%s\n\nТЕКСТ НОВОЙ ГЛАВЫ:\n%s", prevLore, task.Payload)
+
+	llmResponse, err := u.llm.SendChat(iterativeLoreSystemPrompt, userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
@@ -216,6 +242,70 @@ func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTas
 	}
 
 	return u.publishResult(ctx, task, "completed", json.RawMessage(cleanJSONStr), "")
+}
+
+const canonSystemPrompt = `Ты — строгий критик вселенной "%s".
+ОТВЕЧАЙ СТРОГО ПО ДЕЛУ. БЕЗ МАРКДАУН ФОРМАТИРОВАНИЯ. ТОЛЬКО ОБЫЧНЫЙ ТЕКСТ.
+Основывайся ТОЛЬКО на предоставленных фактах из канона.
+Если фактов недостаточно для вывода, не выдумывай детали, а укажи только на явные несоответствия с текстом.
+Твоя задача: найти противоречия между событиями главы и официальным каноном.
+
+ФАКТЫ ИЗ КАНОНА, которые математически близки к тексту главы:
+%s
+
+ТЕКСТ ГЛАВЫ:
+%s
+
+Учитывай теги фанфика (AU, OOC и тд): %s. Если есть тег AU (Alternate Universe), будь лояльнее к изменениям мира.
+Если текст противоречит канону, укажи это списком. Если противоречий нет, верни фразу: Противоречий с каноном не найдено`
+
+func (u *AIUsecase) processCanonCheck(ctx context.Context, task sharedrmq.MLTaskMessage) error {
+	taskID, _ := uuid.Parse(task.TaskID)
+	fandomSlug := task.Metadata["fandom_slug"]
+	warnings := task.Metadata["warnings"]
+
+	_ = u.repo.CreateTask(ctx, taskID, "canon_check", "fandom: "+fandomSlug)
+
+	// 1. Делаем вектор из текста главы (можно резать на чанки, но для начала возьмем весь текст)
+	// Если текст длинный (10к символов), лучше вырезать первые 2000 символов для эмбеддинга,
+	// либо сделать суммаризацию, но начнем с простого:
+	textForEmbedding := task.Payload
+	if len(textForEmbedding) > 2000 {
+		textForEmbedding = textForEmbedding[:2000]
+	}
+	vector, err := u.embeddings.GetEmbedding(ctx, textForEmbedding)
+	if err != nil {
+		return u.publishResult(ctx, task, "failed", nil, "embeddings error: "+err.Error())
+	}
+
+	// 2. Ищем релевантные факты (Топ-7 фактов)
+	facts, err := u.repo.SearchCanonFacts(ctx, fandomSlug, vector, 7)
+	if err != nil {
+		return u.publishResult(ctx, task, "failed", nil, "db search error: "+err.Error())
+	}
+
+	// Если канона по фандому в БД нет
+	if len(facts) == 0 {
+		return u.publishResult(ctx, task, "completed", map[string]string{
+			"message": "База знаний для этого фандома пока пуста.",
+		}, "")
+	}
+
+	factsStr := strings.Join(facts, "\n- ")
+	userPrompt := fmt.Sprintf(canonSystemPrompt, fandomSlug, "- "+factsStr, task.Payload, warnings)
+
+	// 3. Отправляем в LLM
+	llmResponse, err := u.llm.SendChat("Ты строгий критик. Отвечай только на русском языке.", userPrompt)
+	if err != nil {
+		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
+	}
+
+	cleanResponse := strings.ReplaceAll(llmResponse, "**", "")
+	cleanResponse = strings.ReplaceAll(cleanResponse, "*", "")
+
+	return u.publishResult(ctx, task, "completed", map[string]string{
+		"message": strings.TrimSpace(cleanResponse),
+	}, "")
 }
 
 const summarySystemPrompt = `Ты — профессиональный книжный редактор. 

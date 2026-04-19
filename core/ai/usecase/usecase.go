@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -315,4 +316,71 @@ func (u *Usecase) GetJobView(ctx context.Context, jobID uuid.UUID) (map[string]a
 		}
 	}
 	return out, nil
+}
+
+func (u *Usecase) StartCanonCheck(ctx context.Context, chapterID uuid.UUID) (uuid.UUID, error) {
+	ch, err := u.chapters.GetByID(ctx, chapterID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	tags, err := u.stories.TagsForStory(ctx, ch.StoryID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get tags: %w", err)
+	}
+
+	var fandomSlug string
+	var warnings []string
+
+	for _, t := range tags {
+		if t.Category == "directionality" && t.Slug != "originals" {
+			fandomSlug = t.Slug
+		}
+		if t.Category == "warning" {
+			warnings = append(warnings, t.Slug)
+		}
+	}
+
+	if fandomSlug == "" {
+		return uuid.Nil, errors.New("story is original or has no fandom tag, canon check is not applicable")
+	}
+
+	jobID := uuid.New()
+	now := time.Now().UTC()
+	contentHash := sha256Hex(ch.Content)
+
+	job := models.AIJob{
+		ID:           jobID,
+		Type:         "canon_check",
+		Status:       constants.AIJobStatusProcessing,
+		ChapterID:    &ch.ID,
+		StoryID:      &ch.StoryID,
+		InputPayload: []byte(`{"chapterId":"` + chapterID.String() + `"}`),
+		ContentHash:  &contentHash,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := u.jobs.CreateJob(ctx, job); err != nil {
+		return uuid.Nil, err
+	}
+
+	task := rabbitmq.MLTaskMessage{
+		TaskID:  jobID.String(),
+		TraceID: uuid.NewString(),
+		Type:    "canon_check",
+		Payload: ch.Content,
+		Metadata: map[string]string{
+			"story_id":    ch.StoryID.String(),
+			"fandom_slug": fandomSlug,
+			"warnings":    strings.Join(warnings, ","),
+		},
+	}
+
+	body, _ := json.Marshal(task)
+	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
+
+	return jobID, nil
 }

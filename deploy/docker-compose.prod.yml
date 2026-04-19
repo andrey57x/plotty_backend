@@ -54,13 +54,19 @@ services:
     restart: always
 
   ml-db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     environment:
       POSTGRES_USER: ${ML_DB_USER}
       POSTGRES_PASSWORD: ${ML_DB_PASSWORD}
       POSTGRES_DB: ${ML_DB_NAME}
     volumes:
       - pgdata_ml:/var/lib/postgresql/data
+    networks:
+      - plotty_net
+    restart: always
+
+  embeddings:
+    image: ghcr.io/andrey57x/plotty-embeddings:latest
     networks:
       - plotty_net
     restart: always
@@ -159,17 +165,17 @@ services:
       - plotty_net
     restart: always
 
-  # adminer:
-  #   image: adminer
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.adminer.rule=Host(`db.plotty-stories.duckdns.org`)"
-  #     - "traefik.http.routers.adminer.entrypoints=websecure"
-  #     - "traefik.http.routers.adminer.tls.certresolver=myresolver"
-  #     - "traefik.http.routers.adminer.middlewares=dozzle-auth"
-  #   networks:
-  #     - plotty_net
-  #   restart: always
+  adminer:
+    image: adminer
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adminer.rule=Host(`db.plotty-stories.duckdns.org`)"
+      - "traefik.http.routers.adminer.entrypoints=websecure"
+      - "traefik.http.routers.adminer.tls.certresolver=myresolver"
+      - "traefik.http.routers.adminer.middlewares=dozzle-auth"
+    networks:
+      - plotty_net
+    restart: always
 
 volumes:
   pgdata_core:

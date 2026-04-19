@@ -93,3 +93,20 @@ func (d *Delivery) LogicCheck(w http.ResponseWriter, r *http.Request) {
 		"status": constants.AIJobStatusProcessing,
 	})
 }
+
+func (d *Delivery) CanonCheck(w http.ResponseWriter, r *http.Request) {
+	chapterID, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid chapter id")
+		return
+	}
+	jobID, err := d.uc.StartCanonCheck(r.Context(), chapterID)
+	if err != nil {
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+	utilities.WriteJSON(w, http.StatusOK, map[string]any{
+		"jobId":  jobID.String(),
+		"status": constants.AIJobStatusProcessing,
+	})
+}

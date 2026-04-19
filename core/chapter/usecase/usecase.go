@@ -90,14 +90,28 @@ func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, conte
 	}
 
 	if ch.Status == "published" && content != nil {
+		briefs, errBriefs := u.chapters.ListBriefByStory(ctx, ch.StoryID)
+		var prevChapterID string
+		if errBriefs == nil {
+			for _, b := range briefs {
+				if b.ID == ch.ID {
+					break
+				}
+				if b.Status == "published" {
+					prevChapterID = b.ID.String()
+				}
+			}
+		}
+
 		loreTask := rabbitmq.MLTaskMessage{
 			TaskID:  uuid.NewString(),
 			TraceID: uuid.NewString(),
 			Type:    "extract_lore",
 			Payload: ch.Content,
 			Metadata: map[string]string{
-				"story_id":   ch.StoryID.String(),
-				"chapter_id": ch.ID.String(),
+				"story_id":        ch.StoryID.String(),
+				"chapter_id":      ch.ID.String(),
+				"prev_chapter_id": prevChapterID,
 			},
 		}
 		u.publishToRabbitMQ(ctx, loreTask)
@@ -164,28 +178,36 @@ func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
 		log.Warn().Err(err).Stringer("story_id", ch.StoryID).Msg("chapter_uc: publish story failed (non-fatal)")
 	}
 
+	briefs, err := u.chapters.ListBriefByStory(ctx, ch.StoryID)
+	if err != nil {
+		log.Warn().Err(err).Stringer("story_id", ch.StoryID).Msg("chapter_uc: list briefs failed (non-fatal)")
+	}
+
+	var prevChapterID string
+	publishedCount := 0
+	for _, b := range briefs {
+		if b.ID == chapterID {
+			break
+		}
+		if b.Status == "published" {
+			prevChapterID = b.ID.String()
+			publishedCount++
+		}
+	}
+	publishedCount++
+
 	loreTask := rabbitmq.MLTaskMessage{
 		TaskID:  uuid.NewString(),
 		TraceID: uuid.NewString(),
 		Type:    "extract_lore",
 		Payload: ch.Content,
 		Metadata: map[string]string{
-			"story_id":   ch.StoryID.String(),
-			"chapter_id": chapterID.String(),
+			"story_id":        ch.StoryID.String(),
+			"chapter_id":      chapterID.String(),
+			"prev_chapter_id": prevChapterID,
 		},
 	}
 	u.publishToRabbitMQ(ctx, loreTask)
-
-	briefs, err := u.chapters.ListBriefByStory(ctx, ch.StoryID)
-	if err != nil {
-		log.Warn().Err(err).Stringer("story_id", ch.StoryID).Msg("chapter_uc: list briefs failed (non-fatal)")
-	}
-	publishedCount := 0
-	for _, b := range briefs {
-		if b.Status == "published" {
-			publishedCount++
-		}
-	}
 
 	if publishedCount == 1 {
 		summaryTask := rabbitmq.MLTaskMessage{

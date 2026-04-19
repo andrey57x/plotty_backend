@@ -52,8 +52,10 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 		return nil, err
 	}
 
+	embClient := adapters.NewEmbeddingsClient(cfg.EmbeddingsURL)
+
 	repo := repository.NewPostgresRepository(dbPool)
-	uc := usecase.NewAIUsecase(repo, ltAdapter, gcClient, st, rmqChan)
+	uc := usecase.NewAIUsecase(repo, ltAdapter, gcClient, st, embClient, rmqChan)
 
 	consumer, err := rabbitmq.NewConsumer(rmqConn)
 	if err != nil {

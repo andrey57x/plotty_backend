@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +24,9 @@ type MLRepository interface {
 	GetChapterLoreHash(ctx context.Context, chapterID uuid.UUID) (string, error)
 	GetMergedLore(ctx context.Context, chapterIDs []uuid.UUID) (string, error)
 	DeleteStoryLore(ctx context.Context, storyID uuid.UUID) error
+
+	GetLoreByChapterID(ctx context.Context, chapterID uuid.UUID) (string, error)
+	SearchCanonFacts(ctx context.Context, fandomSlug string, embedding []float32, limit int) ([]string, error)
 }
 
 type postgresRepo struct {
@@ -163,4 +168,56 @@ func (r *postgresRepo) DeleteStoryLore(ctx context.Context, storyID uuid.UUID) e
 	}
 	_, err = r.db.Exec(ctx, "DELETE FROM story_lorebooks WHERE story_id = $1", storyID)
 	return err
+}
+
+func (r *postgresRepo) GetLoreByChapterID(ctx context.Context, chapterID uuid.UUID) (string, error) {
+	var entities string
+	err := r.db.QueryRow(ctx, "SELECT entities FROM chapter_lorebooks WHERE chapter_id = $1", chapterID).Scan(&entities)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "{}", nil
+		}
+		return "", err
+	}
+	return entities, nil
+}
+
+func vecToString(v []float32) string {
+	s := make([]string, len(v))
+	for i, val := range v {
+		s[i] = fmt.Sprintf("%f", val)
+	}
+	return "[" + strings.Join(s, ",") + "]"
+}
+
+func (r *postgresRepo) SearchCanonFacts(ctx context.Context, fandomSlug string, embedding []float32, limit int) ([]string, error) {
+	vecStr := vecToString(embedding)
+
+	query := `
+		SELECT fact_text 
+		FROM canon_lorebooks 
+		WHERE fandom_slug = $1 
+		ORDER BY embedding <=> $2::vector 
+		LIMIT $3
+	`
+	rows, err := r.db.Query(ctx, query, fandomSlug, vecStr, limit)
+	if err != nil {
+		return nil, fmt.Errorf("db.Query error: %w", err)
+	}
+	defer rows.Close()
+
+	var facts []string
+	for rows.Next() {
+		var fact string
+		if err := rows.Scan(&fact); err != nil {
+			return nil, fmt.Errorf("rows.Scan error: %w", err)
+		}
+		facts = append(facts, fact)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows.Err: %w", err)
+	}
+
+	return facts, nil
 }

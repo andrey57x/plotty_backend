@@ -112,8 +112,14 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Patch).Methods(http.MethodPatch)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Delete).Methods(http.MethodDelete)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/publish", cd.Publish).Methods(http.MethodPost)
+	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/canon-check", ad.CanonCheck).Methods(http.MethodPost)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/comments/{commentId:"+uuidRe+"}", comd.Delete).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/ai/spellcheck", ad.Spellcheck).Methods(http.MethodPost)
+	protected.HandleFunc("/ai/image-generation", ad.ImageGeneration).Methods(http.MethodPost)
+	protected.HandleFunc("/ai/logic-check", ad.LogicCheck).Methods(http.MethodPost)
+	protected.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
 
 	protected.HandleFunc("/profile", authd.UpdateProfile).Methods(http.MethodPatch)
 
@@ -123,11 +129,6 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.List).Methods(http.MethodGet)
 
 	api.HandleFunc("/tags", td.List).Methods(http.MethodGet)
-
-	api.HandleFunc("/ai/spellcheck", ad.Spellcheck).Methods(http.MethodPost)
-	api.HandleFunc("/ai/image-generation", ad.ImageGeneration).Methods(http.MethodPost)
-	api.HandleFunc("/ai/logic-check", ad.LogicCheck).Methods(http.MethodPost)
-	api.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
 
 	return middleware.CORS(r)
 }

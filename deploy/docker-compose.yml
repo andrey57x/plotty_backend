@@ -12,7 +12,7 @@ services:
       - pgdata_core:/var/lib/postgresql/data
 
   ml-db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     env_file: ../.env
     environment:
       POSTGRES_USER: ${ML_DB_USER}
@@ -22,6 +22,15 @@ services:
       - "${ML_DB_LOCAL_PORT}:5432"
     volumes:
       - pgdata_ml:/var/lib/postgresql/data
+
+  embeddings:
+    build:
+      context: ../ml/embeddings
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      default:
 
   redis:
     image: redis:7-alpine

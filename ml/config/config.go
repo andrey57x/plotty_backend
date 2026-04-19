@@ -23,6 +23,8 @@ type Config struct {
 	MinioUser       string `mapstructure:"MINIO_ROOT_USER"`
 	MinioPassword   string `mapstructure:"MINIO_ROOT_PASSWORD"`
 	MinioBucket     string `mapstructure:"MINIO_BUCKET_NAME"`
+
+	EmbeddingsURL   string `mapstructure:"EMBEDDINGS_URL"`
 }
 
 func (c *Config) GetDSN() string {
