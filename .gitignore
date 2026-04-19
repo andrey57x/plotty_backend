@@ -32,4 +32,5 @@ go.work.sum
 # .vscode/
 
 collect.sh
-*.txt
+forbidden.txt
+cookies.txt
