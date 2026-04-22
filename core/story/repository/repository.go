@@ -479,6 +479,32 @@ func (r *Repository) ChapterCounts(ctx context.Context, storyIDs []uuid.UUID) (m
 	return out, rows.Err()
 }
 
+func (r *Repository) ChapterCountsPublished(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	out := make(map[uuid.UUID]int)
+	if len(storyIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT story_id, COUNT(*)::int
+		FROM chapters
+		WHERE story_id = ANY($1) AND status = 'published'
+		GROUP BY story_id
+	`, storyIDs)
+	if err != nil {
+		return nil, fmt.Errorf("story_repo.ChapterCountsPublished: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid uuid.UUID
+		var c int
+		if err := rows.Scan(&sid, &c); err != nil {
+			return nil, fmt.Errorf("story_repo.ChapterCountsPublished scan: %w", err)
+		}
+		out[sid] = c
+	}
+	return out, rows.Err()
+}
+
 func (r *Repository) TagsForStory(ctx context.Context, storyID uuid.UUID) ([]models.Tag, error) {
 	m, err := r.TagsForStories(ctx, []uuid.UUID{storyID})
 	if err != nil {

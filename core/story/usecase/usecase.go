@@ -78,9 +78,9 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 		log.Error().Err(err).Msg("story_uc: TagsForStories failed")
 		return nil, 0, fmt.Errorf("story_uc.List tags: %w", err)
 	}
-	counts, err := u.stories.ChapterCounts(ctx, ids)
+	counts, err := u.stories.ChapterCountsPublished(ctx, ids)
 	if err != nil {
-		log.Error().Err(err).Msg("story_uc: ChapterCounts failed")
+		log.Error().Err(err).Msg("story_uc: ChapterCountsPublished failed")
 		return nil, 0, fmt.Errorf("story_uc.List chapter counts: %w", err)
 	}
 	likes, err := u.stories.LikeCounts(ctx, ids)
