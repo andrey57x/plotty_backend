@@ -28,6 +28,12 @@ type Config struct {
 	RabbitMQURL string `mapstructure:"RABBITMQ_URL"`
 
 	SessionDurationDays int `mapstructure:"SESSION_DURATION_DAYS"`
+
+	MinioEndpoint  string `mapstructure:"MINIO_ENDPOINT"`
+	MinioPublicURL string `mapstructure:"MINIO_PUBLIC_URL"`
+	MinioUser      string `mapstructure:"MINIO_ROOT_USER"`
+	MinioPassword  string `mapstructure:"MINIO_ROOT_PASSWORD"`
+	MinioBucket    string `mapstructure:"MINIO_BUCKET_NAME"`
 }
 
 func Load() (*Config, error) {

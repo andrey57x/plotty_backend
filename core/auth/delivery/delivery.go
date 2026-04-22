@@ -3,7 +3,11 @@ package delivery
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/fivecode/plotty/core/logger"
@@ -17,6 +21,7 @@ import (
 type AuthDelivery struct {
 	SessionDuration time.Duration
 	Usecase         AuthUsecase
+	Storage         AvatarStorage
 }
 
 type AuthUsecase interface {
@@ -27,10 +32,15 @@ type AuthUsecase interface {
 	UpdateProfile(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error)
 }
 
-func New(uc AuthUsecase, sessionDuration time.Duration) *AuthDelivery {
+type AvatarStorage interface {
+	Upload(ctx context.Context, fileName string, reader io.Reader, size int64, contentType string) (string, error)
+}
+
+func New(uc AuthUsecase, sessionDuration time.Duration, st AvatarStorage) *AuthDelivery {
 	return &AuthDelivery{
 		SessionDuration: sessionDuration,
 		Usecase:         uc,
+		Storage:         st,
 	}
 }
 
@@ -246,4 +256,97 @@ func (d *AuthDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	utilities.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"user": user,
 	})
+}
+
+const maxAvatarSizeBytes = 5 << 20 // 5 MiB
+
+func avatarExtAndContentType(filename, contentType string) (string, string) {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	ext := strings.ToLower(path.Ext(filename))
+	switch ext {
+	case ".png":
+		if ct == "" {
+			ct = "image/png"
+		}
+		return ext, ct
+	case ".jpg", ".jpeg":
+		if ct == "" {
+			ct = "image/jpeg"
+		}
+		return ext, ct
+	case ".webp":
+		if ct == "" {
+			ct = "image/webp"
+		}
+		return ext, ct
+	case ".gif":
+		if ct == "" {
+			ct = "image/gif"
+		}
+		return ext, ct
+	}
+
+	switch ct {
+	case "image/png":
+		return ".png", ct
+	case "image/jpeg":
+		return ".jpg", ct
+	case "image/webp":
+		return ".webp", ct
+	case "image/gif":
+		return ".gif", ct
+	default:
+		return "", ""
+	}
+}
+
+func (d *AuthDelivery) UploadAvatar(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		utilities.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if d.Storage == nil {
+		log.Error().Msg("avatar upload requested but storage is nil")
+		utilities.WriteError(w, http.StatusInternalServerError, "avatar storage not configured")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxAvatarSizeBytes)
+	if err := r.ParseMultipartForm(maxAvatarSizeBytes); err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid multipart form")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "missing file")
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	ext, contentType := avatarExtAndContentType(header.Filename, header.Header.Get("Content-Type"))
+	if ext == "" {
+		utilities.WriteError(w, http.StatusBadRequest, "unsupported image type")
+		return
+	}
+
+	objectName := fmt.Sprintf("avatars/%d/%d%s", userID, time.Now().UTC().UnixNano(), ext)
+	url, err := d.Storage.Upload(r.Context(), objectName, file, header.Size, contentType)
+	if err != nil {
+		log.Error().Err(err).Uint64("user_id", userID).Msg("avatar upload failed")
+		utilities.WriteError(w, http.StatusInternalServerError, "failed to upload avatar")
+		return
+	}
+
+	user, err := d.Usecase.UpdateProfile(r.Context(), userID, nil, &url)
+	if err != nil {
+		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to update avatar url in profile")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, map[string]any{"user": user})
 }

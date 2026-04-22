@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	aideliv "github.com/fivecode/plotty/core/ai/delivery"
@@ -31,6 +32,7 @@ import (
 	tagrepo "github.com/fivecode/plotty/core/tag/repository"
 	taguc "github.com/fivecode/plotty/core/tag/usecase"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
+	storage "github.com/fivecode/plotty/internal/infrastructure/minio"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -58,11 +60,18 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 
 	sessionDuration := time.Duration(cfg.SessionDurationDays) * 24 * time.Hour
 
+	var st *storage.MinioStorage
+	if strings.TrimSpace(cfg.MinioEndpoint) != "" && strings.TrimSpace(cfg.MinioBucket) != "" {
+		if ss, err := storage.NewMinioStorage(cfg.MinioEndpoint, cfg.MinioUser, cfg.MinioPassword, cfg.MinioBucket, cfg.MinioPublicURL); err == nil {
+			st = ss
+		}
+	}
+
 	sd := storydeliv.New(su)
 	cd := chdeliv.New(cu)
 	td := tagdeliv.New(tu)
 	ad := aideliv.New(au)
-	authd := authdeliv.New(authu, sessionDuration)
+	authd := authdeliv.New(authu, sessionDuration, st)
 	ld := likedeliv.New(lu)
 	comd := commentdeliv.New(comu)
 
@@ -122,6 +131,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
 
 	protected.HandleFunc("/profile", authd.UpdateProfile).Methods(http.MethodPatch)
+	protected.HandleFunc("/profile/avatar", authd.UploadAvatar).Methods(http.MethodPost)
 
 	api.HandleFunc("/stories/{slug}", sd.GetBySlug).Methods(http.MethodGet)
 

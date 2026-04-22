@@ -101,7 +101,7 @@ type User struct {
 	ID        uint64     `json:"id"`
 	Email     string     `json:"email"`
 	Username  string     `json:"username"`
-	AvatarURL *string    `json:"avatar_url,omitempty"`
+	AvatarURL *string    `json:"avatarUrl,omitempty"`
 	Password  string     `json:"-"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
