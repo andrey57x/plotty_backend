@@ -198,3 +198,45 @@ func (d *Delivery) Delete(w http.ResponseWriter, r *http.Request) {
 	log.Info().Stringer("story_id", id).Msg("story_delivery: deleted")
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (d *Delivery) GetSimilar(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	items, err := d.uc.GetSimilar(r.Context(), id)
+	if err != nil {
+		log.Warn().Err(err).Msg("story_delivery: similar failed")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, map[string]any{
+		"items": items,
+	})
+}
+
+func (d *Delivery) GetAnalytics(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	analytics, err := d.uc.GetAnalytics(r.Context(), id)
+	if err != nil {
+		log.Warn().Err(err).Msg("story_delivery: analytics failed")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, map[string]any{
+		"analytics": analytics,
+	})
+}

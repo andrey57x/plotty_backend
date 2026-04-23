@@ -609,3 +609,97 @@ func (r *Repository) UpdateAISummary(ctx context.Context, storyID uuid.UUID, sum
 	}
 	return nil
 }
+
+func (r *Repository) ListSemanticIDs(ctx context.Context, semanticIDs []uuid.UUID, tagSlugs []string, limit, offset int) ([]uuid.UUID, error) {
+	tagSlugs = dedupeStrings(tagSlugs)
+	groups, found, err := r.groupTagSlugsByCategory(ctx, tagSlugs)
+	if err != nil {
+		return nil, err
+	}
+	if len(tagSlugs) > 0 && found != len(tagSlugs) {
+		return []uuid.UUID{}, nil
+	}
+
+	args := []any{semanticIDs, limit, offset}
+	whereTags := ""
+	if len(groups) > 0 {
+		for _, slugs := range groups {
+			args = append(args, slugs)
+			ph := len(args)
+			whereTags += fmt.Sprintf(`
+				AND EXISTS (
+					SELECT 1
+					FROM story_tags st
+					JOIN tags tg ON tg.id = st.tag_id
+					WHERE st.story_id = s.id AND tg.slug = ANY($%d::text[])
+				)
+			`, ph)
+		}
+	}
+
+	query := fmt.Sprintf(`
+		SELECT s.id
+		FROM unnest($1::uuid[]) WITH ORDINALITY t(id, ord)
+		JOIN stories s ON s.id = t.id
+		WHERE s.status = 'published'
+		%s
+		ORDER BY t.ord
+		LIMIT $2 OFFSET $3
+	`, whereTags)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("story_repo.ListSemanticIDs: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (r *Repository) CountSemanticIDs(ctx context.Context, semanticIDs []uuid.UUID, tagSlugs []string) (int, error) {
+	tagSlugs = dedupeStrings(tagSlugs)
+	groups, found, err := r.groupTagSlugsByCategory(ctx, tagSlugs)
+	if err != nil {
+		return 0, err
+	}
+	if len(tagSlugs) > 0 && found != len(tagSlugs) {
+		return 0, nil
+	}
+
+	args := []any{semanticIDs}
+	whereTags := ""
+	if len(groups) > 0 {
+		for _, slugs := range groups {
+			args = append(args, slugs)
+			ph := len(args)
+			whereTags += fmt.Sprintf(`
+				AND EXISTS (
+					SELECT 1
+					FROM story_tags st
+					JOIN tags tg ON tg.id = st.tag_id
+					WHERE st.story_id = s.id AND tg.slug = ANY($%d::text[])
+				)
+			`, ph)
+		}
+	}
+
+	query := fmt.Sprintf(`
+		SELECT COUNT(*)::int
+		FROM unnest($1::uuid[]) t(id)
+		JOIN stories s ON s.id = t.id
+		WHERE s.status = 'published'
+		%s
+	`, whereTags)
+
+	var total int
+	err = r.pool.QueryRow(ctx, query, args...).Scan(&total)
+	return total, err
+}

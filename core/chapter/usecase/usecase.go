@@ -8,6 +8,8 @@ import (
 
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
 	"github.com/fivecode/plotty/core/logger"
+	"github.com/fivecode/plotty/core/middleware"
+	"github.com/fivecode/plotty/core/ml"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
@@ -26,10 +28,11 @@ type Usecase struct {
 	stories     *storyrepo.Repository
 	rmqChan     *amqp.Channel
 	authChecker StoryAuthorChecker
+	mlClient    *ml.Client
 }
 
-func New(chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel) *Usecase {
-	return &Usecase{chapters: chapters, stories: stories, rmqChan: rmqChan}
+func New(chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel, mlClient *ml.Client) *Usecase {
+	return &Usecase{chapters: chapters, stories: stories, rmqChan: rmqChan, mlClient: mlClient}
 }
 
 func (u *Usecase) SetAuthorChecker(checker StoryAuthorChecker) {
@@ -241,4 +244,46 @@ func (u *Usecase) publishToRabbitMQ(ctx context.Context, task rabbitmq.MLTaskMes
 	} else {
 		log.Info().Str("task_type", task.Type).Str("task_id", task.TaskID).Msg("chapter_uc: ML task published")
 	}
+}
+
+func (u *Usecase) GetWiki(ctx context.Context, chapterID uuid.UUID) (json.RawMessage, error) {
+	ch, err := u.chapters.GetByID(ctx, chapterID)
+	if err != nil {
+		return nil, fmt.Errorf("GetWiki get chapter: %w", err)
+	}
+
+	if ch.Status != "published" && u.authChecker != nil {
+		if err := u.authChecker.CheckAuthorByChapter(ctx, chapterID); err != nil {
+			return nil, err
+		}
+	}
+
+	briefs, err := u.chapters.ListBriefByStory(ctx, ch.StoryID)
+	if err != nil {
+		return nil, fmt.Errorf("GetWiki list briefs: %w", err)
+	}
+
+	var prevPublishedID uuid.UUID
+	for _, b := range briefs {
+		if b.ID == chapterID {
+			break
+		}
+		if b.Status == "published" {
+			prevPublishedID = b.ID
+		}
+	}
+
+	if prevPublishedID == uuid.Nil {
+		return []byte("{}"), nil
+	}
+
+	return u.mlClient.GetWiki(ctx, prevPublishedID)
+}
+
+func (u *Usecase) AddView(ctx context.Context, chapterID uuid.UUID) error {
+	userID, ok := middleware.GetUserID(ctx)
+	if !ok {
+		return nil
+	}
+	return u.chapters.AddView(ctx, chapterID, userID)
 }

@@ -9,6 +9,7 @@ import (
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
 	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/middleware"
+	"github.com/fivecode/plotty/core/ml"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
 	"github.com/fivecode/plotty/core/slug"
@@ -22,10 +23,11 @@ type Usecase struct {
 	stories  *storyrepo.Repository
 	tags     *tagrepo.Repository
 	chapters *chapterrepo.Repository
+	mlClient *ml.Client
 }
 
-func New(stories *storyrepo.Repository, tags *tagrepo.Repository, chapters *chapterrepo.Repository) *Usecase {
-	return &Usecase{stories: stories, tags: tags, chapters: chapters}
+func New(stories *storyrepo.Repository, tags *tagrepo.Repository, chapters *chapterrepo.Repository, mlClient *ml.Client) *Usecase {
+	return &Usecase{stories: stories, tags: tags, chapters: chapters, mlClient: mlClient}
 }
 
 func dedupeUUIDs(ids []uuid.UUID) []uuid.UUID {
@@ -55,19 +57,42 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 	}
 	offset := (page - 1) * pageSize
 
-	total, err := u.stories.CountList(ctx, q, tagSlugs)
-	if err != nil {
-		log.Error().Err(err).Msg("story_uc: CountList failed")
-		return nil, 0, fmt.Errorf("story_uc.List count: %w", err)
+	var ids []uuid.UUID
+	var total int
+	var err error
+
+	words := strings.Fields(q)
+	isSemantic := len(words) > 2
+
+	if isSemantic {
+		semanticIDs, mlErr := u.mlClient.SearchSemantic(ctx, q)
+		if mlErr == nil && len(semanticIDs) > 0 {
+			total, err = u.stories.CountSemanticIDs(ctx, semanticIDs, tagSlugs)
+			if err == nil {
+				ids, err = u.stories.ListSemanticIDs(ctx, semanticIDs, tagSlugs, pageSize, offset)
+			}
+		} else {
+			isSemantic = false
+		}
 	}
-	ids, err := u.stories.ListIDs(ctx, q, tagSlugs, pageSize, offset)
-	if err != nil {
-		log.Error().Err(err).Msg("story_uc: ListIDs failed")
-		return nil, 0, fmt.Errorf("story_uc.List ids: %w", err)
+
+	if !isSemantic {
+		total, err = u.stories.CountList(ctx, q, tagSlugs)
+		if err != nil {
+			log.Error().Err(err).Msg("story_uc: CountList failed")
+			return nil, 0, fmt.Errorf("story_uc.List count: %w", err)
+		}
+		ids, err = u.stories.ListIDs(ctx, q, tagSlugs, pageSize, offset)
+		if err != nil {
+			log.Error().Err(err).Msg("story_uc: ListIDs failed")
+			return nil, 0, fmt.Errorf("story_uc.List ids: %w", err)
+		}
 	}
+
 	if len(ids) == 0 {
 		return []models.StoryListItem{}, total, nil
 	}
+
 	byID, err := u.stories.LoadStoriesByIDs(ctx, ids)
 	if err != nil {
 		log.Error().Err(err).Msg("story_uc: LoadStoriesByIDs failed")
@@ -109,7 +134,7 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 		})
 	}
 
-	log.Info().Int("total", total).Int("returned", len(items)).Msg("story_uc: list ok")
+	log.Info().Int("total", total).Int("returned", len(items)).Bool("semantic", isSemantic).Msg("story_uc: list ok")
 	return items, total, nil
 }
 
@@ -352,6 +377,53 @@ func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	// TODO: delete chapters
-	
+
 	return nil
+}
+
+func (u *Usecase) GetSimilar(ctx context.Context, storyID uuid.UUID) ([]models.StoryListItem, error) {
+	log := logger.FromContext(ctx)
+
+	ids, err := u.mlClient.GetSimilarStories(ctx, storyID)
+	if err != nil {
+		log.Error().Err(err).Stringer("story_id", storyID).Msg("story_uc: ml GetSimilarStories failed")
+		return nil, fmt.Errorf("story_uc.GetSimilar ml: %w", err)
+	}
+
+	if len(ids) == 0 {
+		return []models.StoryListItem{}, nil
+	}
+
+	byID, err := u.stories.LoadStoriesByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	tagsMap, _ := u.stories.TagsForStories(ctx, ids)
+	counts, _ := u.stories.ChapterCountsPublished(ctx, ids)
+	likes, _ := u.stories.LikeCounts(ctx, ids)
+	authors, _ := u.stories.AuthorsForStories(ctx, ids)
+
+	items := make([]models.StoryListItem, 0, len(ids))
+	for _, id := range ids {
+		s, ok := byID[id]
+		if !ok || s.Status != "published" {
+			continue
+		}
+		items = append(items, models.StoryListItem{
+			Story:         s,
+			Tags:          tagsMap[id],
+			ChaptersCount: counts[id],
+			LikesCount:    likes[id],
+			Author:        authors[id],
+		})
+	}
+
+	return items, nil
+}
+
+func (u *Usecase) GetAnalytics(ctx context.Context, storyID uuid.UUID) ([]models.ChapterAnalytics, error) {
+	if err := u.checkAuthor(ctx, storyID); err != nil {
+		return nil, err
+	}
+	return u.chapters.GetStoryAnalytics(ctx, storyID)
 }

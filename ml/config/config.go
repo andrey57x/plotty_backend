@@ -8,23 +8,24 @@ import (
 )
 
 type Config struct {
+	HTTPPort        string `mapstructure:"ML_HTTP_PORT"`
 	RabbitMQURL     string `mapstructure:"RABBITMQ_URL"`
 	GigaChatAuthKey string `mapstructure:"GIGACHAT_AUTH_KEY"`
 	LanguageToolURL string `mapstructure:"LANGUAGETOOL_URL"`
-	
+
 	DBHost     string `mapstructure:"ML_DB_HOST"`
 	DBPort     string `mapstructure:"ML_DB_PORT"`
 	DBUser     string `mapstructure:"ML_DB_USER"`
 	DBPassword string `mapstructure:"ML_DB_PASSWORD"`
 	DBName     string `mapstructure:"ML_DB_NAME"`
 
-	MinioEndpoint   string `mapstructure:"MINIO_ENDPOINT"`
-	MinioPublicURL  string `mapstructure:"MINIO_PUBLIC_URL"`
-	MinioUser       string `mapstructure:"MINIO_ROOT_USER"`
-	MinioPassword   string `mapstructure:"MINIO_ROOT_PASSWORD"`
-	MinioBucket     string `mapstructure:"MINIO_BUCKET_NAME"`
+	MinioEndpoint  string `mapstructure:"MINIO_ENDPOINT"`
+	MinioPublicURL string `mapstructure:"MINIO_PUBLIC_URL"`
+	MinioUser      string `mapstructure:"MINIO_ROOT_USER"`
+	MinioPassword  string `mapstructure:"MINIO_ROOT_PASSWORD"`
+	MinioBucket    string `mapstructure:"MINIO_BUCKET_NAME"`
 
-	EmbeddingsURL   string `mapstructure:"EMBEDDINGS_URL"`
+	EmbeddingsURL string `mapstructure:"EMBEDDINGS_URL"`
 }
 
 func (c *Config) GetDSN() string {
@@ -45,9 +46,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("ошибка парсинга ML конфига: %w", err)
 	}
 
-	if cfg.RabbitMQURL == "" {
-		cfg.RabbitMQURL = "amqp://guest:guest@localhost:5672/"
-	}
+	// if cfg.RabbitMQURL == "" {
+	// 	cfg.RabbitMQURL = "amqp://guest:guest@localhost:5672/"
+	// }
+	// if cfg.HTTPPort == "" {
+	// 	cfg.HTTPPort = "8081"
+	// }
 
 	return &cfg, nil
 }

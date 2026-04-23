@@ -1,0 +1,1 @@
+ALTER TABLE story_lorebooks DROP COLUMN IF EXISTS embedding;

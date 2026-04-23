@@ -24,6 +24,7 @@ import (
 	likerepo "github.com/fivecode/plotty/core/like/repository"
 	likeuc "github.com/fivecode/plotty/core/like/usecase"
 	"github.com/fivecode/plotty/core/middleware"
+	"github.com/fivecode/plotty/core/ml"
 	"github.com/fivecode/plotty/core/redis"
 	storydeliv "github.com/fivecode/plotty/core/story/delivery"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
@@ -31,8 +32,8 @@ import (
 	tagdeliv "github.com/fivecode/plotty/core/tag/delivery"
 	tagrepo "github.com/fivecode/plotty/core/tag/repository"
 	taguc "github.com/fivecode/plotty/core/tag/usecase"
-	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	storage "github.com/fivecode/plotty/internal/infrastructure/minio"
+	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -50,9 +51,12 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	comr := commentrepo.New(pool)
 
 	tu := taguc.New(tr)
-	su := storyuc.New(sr, tr, cr)
-	cu := chuc.New(cr, sr, rmqChan)
+	mlClient := ml.NewClient(cfg.MLBaseURL)
+
+	su := storyuc.New(sr, tr, cr, mlClient)
+	cu := chuc.New(cr, sr, rmqChan, mlClient)
 	cu.SetAuthorChecker(su)
+
 	au := aiuc.New(ar, cr, sr, rmqChan)
 	authu := authuc.New(authr)
 	lu := likeuc.New(lr)
@@ -106,6 +110,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	api.HandleFunc("/session", authd.GetSession).Methods(http.MethodGet)
 
 	api.HandleFunc("/stories", sd.List).Methods(http.MethodGet)
+	api.HandleFunc("/stories/{id:"+uuidRe+"}/similar", sd.GetSimilar).Methods(http.MethodGet)
 
 	protected := api.NewRoute().Subrouter()
 	protected.Use(middleware.AuthMiddleware(redisDB))
@@ -116,6 +121,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}", sd.Delete).Methods(http.MethodDelete)
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}/like", ld.Like).Methods(http.MethodPost)
 	protected.HandleFunc("/stories/{id:"+uuidRe+"}/like", ld.Unlike).Methods(http.MethodDelete)
+	protected.HandleFunc("/stories/{id:"+uuidRe+"}/analytics", sd.GetAnalytics).Methods(http.MethodGet)
 
 	protected.HandleFunc("/stories/{storyId:"+uuidRe+"}/chapters", cd.CreateUnderStory).Methods(http.MethodPost)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Patch).Methods(http.MethodPatch)
@@ -134,8 +140,10 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected.HandleFunc("/profile/avatar", authd.UploadAvatar).Methods(http.MethodPost)
 
 	api.HandleFunc("/stories/{slug}", sd.GetBySlug).Methods(http.MethodGet)
+	api.HandleFunc("/chapters/{id:"+uuidRe+"}/view", cd.AddView).Methods(http.MethodPost)
 
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Get).Methods(http.MethodGet)
+	api.HandleFunc("/chapters/{id:"+uuidRe+"}/wiki", cd.GetWiki).Methods(http.MethodGet)
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.List).Methods(http.MethodGet)
 
 	api.HandleFunc("/tags", td.List).Methods(http.MethodGet)

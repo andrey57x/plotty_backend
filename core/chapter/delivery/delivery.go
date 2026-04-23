@@ -141,3 +141,34 @@ func (d *Delivery) Publish(w http.ResponseWriter, r *http.Request) {
 	log.Info().Stringer("chapter_id", id).Msg("chapter_delivery: published")
 	utilities.WriteJSON(w, http.StatusOK, map[string]string{"status": "published"})
 }
+
+func (d *Delivery) GetWiki(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	wikiJSON, err := d.uc.GetWiki(r.Context(), id)
+	if err != nil {
+		log.Warn().Err(err).Stringer("chapter_id", id).Msg("chapter_delivery: get wiki failed")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(wikiJSON)
+}
+
+func (d *Delivery) AddView(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	
+	_ = d.uc.AddView(r.Context(), id)
+	w.WriteHeader(http.StatusOK)
+}

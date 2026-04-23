@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"net/http"
 
 	"github.com/fivecode/plotty/internal/infrastructure/gigachat"
 	"github.com/fivecode/plotty/internal/infrastructure/languagetool"
@@ -10,6 +11,7 @@ import (
 	sharedrmq "github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/fivecode/plotty/ml/config"
 	"github.com/fivecode/plotty/ml/internal/adapters"
+	mlhttp "github.com/fivecode/plotty/ml/internal/delivery/http"
 	"github.com/fivecode/plotty/ml/internal/delivery/rabbitmq"
 	"github.com/fivecode/plotty/ml/internal/repository"
 	"github.com/fivecode/plotty/ml/internal/usecase"
@@ -18,13 +20,14 @@ import (
 )
 
 type App struct {
-	cfg      *config.Config
-	rmqConn  *amqp.Connection
-	rmqChan  *amqp.Channel
-	dbPool   *pgxpool.Pool
-	storage  *storage.MinioStorage
-	usecase  *usecase.AIUsecase
-	consumer *rabbitmq.Consumer
+	cfg        *config.Config
+	rmqConn    *amqp.Connection
+	rmqChan    *amqp.Channel
+	dbPool     *pgxpool.Pool
+	storage    *storage.MinioStorage
+	usecase    *usecase.AIUsecase
+	consumer   *rabbitmq.Consumer
+	httpServer *http.Server
 }
 
 func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) (*App, error) {
@@ -62,14 +65,21 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 		return nil, err
 	}
 
+	handler := mlhttp.NewHandler(repo, embClient)
+	httpServer := &http.Server{
+		Addr:    ":" + cfg.HTTPPort,
+		Handler: handler,
+	}
+
 	return &App{
-		cfg:      cfg,
-		rmqConn:  rmqConn,
-		rmqChan:  rmqChan,
-		dbPool:   dbPool,
-		storage:  st,
-		consumer: consumer,
-		usecase:  uc,
+		cfg:        cfg,
+		rmqConn:    rmqConn,
+		rmqChan:    rmqChan,
+		dbPool:     dbPool,
+		storage:    st,
+		consumer:   consumer,
+		usecase:    uc,
+		httpServer: httpServer,
 	}, nil
 }
 
@@ -86,6 +96,13 @@ func (a *App) Run(ctx context.Context) error {
 		return err2
 	}
 
+	go func() {
+		log.Printf("ML Worker: Внутренний HTTP сервер запущен на порту %s", a.cfg.HTTPPort)
+		if err := a.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Ошибка HTTP сервера ML: %v", err)
+		}
+	}()
+
 	<-ctx.Done()
 	log.Println("ML Worker: Контекст отменен, завершение работы...")
 	return ctx.Err()
@@ -93,6 +110,11 @@ func (a *App) Run(ctx context.Context) error {
 
 func (a *App) Stop() {
 	log.Println("ML Worker: Очистка ресурсов...")
+
+	if a.httpServer != nil {
+		a.httpServer.Shutdown(context.Background())
+	}
+
 	if a.consumer != nil {
 		a.consumer.Close()
 	}

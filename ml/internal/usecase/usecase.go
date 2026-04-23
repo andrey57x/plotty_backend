@@ -18,7 +18,7 @@ import (
 )
 
 type Spellchecker interface {
-	CheckText(ctx context.Context, text string) (models.SpellcheckResult, error)
+	CheckText(ctx context.Context, text string, allowedWords []string) (models.SpellcheckResult, error)
 }
 
 type LLMProvider interface {
@@ -103,6 +103,9 @@ func sha256Hex(data string) string {
 
 func (u *AIUsecase) ProcessSpellcheck(ctx context.Context, task sharedrmq.MLTaskMessage) error {
 	taskID, _ := uuid.Parse(task.TaskID)
+	storyIDStr := task.Metadata["story_id"]
+	fandomSlug := task.Metadata["fandom_slug"]
+
 	var input struct {
 		Content string `json:"content"`
 	}
@@ -112,7 +115,17 @@ func (u *AIUsecase) ProcessSpellcheck(ctx context.Context, task sharedrmq.MLTask
 		return err
 	}
 
-	res, err := u.spellchecker.CheckText(ctx, input.Content)
+	allowedWords := make([]string, 0)
+	if storyID, err := uuid.Parse(storyIDStr); err == nil && storyID != uuid.Nil {
+		storyNames, _ := u.repo.GetStoryLoreNames(ctx, storyID)
+		allowedWords = append(allowedWords, storyNames...)
+	}
+	if fandomSlug != "" {
+		canonNames, _ := u.repo.GetCanonEntityNames(ctx, fandomSlug)
+		allowedWords = append(allowedWords, canonNames...)
+	}
+
+	res, err := u.spellchecker.CheckText(ctx, input.Content, allowedWords)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, err.Error())
 	}
@@ -323,10 +336,15 @@ func (u *AIUsecase) processGenerateSummary(ctx context.Context, task sharedrmq.M
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
-
 	summary = strings.TrimSpace(summary)
 
-	if err := u.repo.UpdateSummary(ctx, storyID, summary); err != nil {
+	embedding, err := u.embeddings.GetEmbedding(ctx, summary)
+	if err != nil {
+		_ = u.repo.UpdateSummary(ctx, storyID, summary)
+		return u.publishResult(ctx, task, "failed", nil, "embedding error: "+err.Error())
+	}
+
+	if err := u.repo.UpdateSummaryAndEmbedding(ctx, storyID, summary, embedding); err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "failed to save summary: "+err.Error())
 	}
 

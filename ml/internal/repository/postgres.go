@@ -27,6 +27,14 @@ type MLRepository interface {
 
 	GetLoreByChapterID(ctx context.Context, chapterID uuid.UUID) (string, error)
 	SearchCanonFacts(ctx context.Context, fandomSlug string, embedding []float32, limit int) ([]string, error)
+
+	GetStoryLoreNames(ctx context.Context, storyID uuid.UUID) ([]string, error)
+	GetCanonEntityNames(ctx context.Context, fandomSlug string) ([]string, error)
+
+	UpdateSummaryAndEmbedding(ctx context.Context, storyID uuid.UUID, summary string, embedding []float32) error
+	GetSimilarStories(ctx context.Context, storyID uuid.UUID, limit int) ([]uuid.UUID, error)
+
+	SearchStoriesByEmbedding(ctx context.Context, embedding []float32, limit int) ([]uuid.UUID, error)
 }
 
 type postgresRepo struct {
@@ -220,4 +228,138 @@ func (r *postgresRepo) SearchCanonFacts(ctx context.Context, fandomSlug string, 
 	}
 
 	return facts, nil
+}
+
+func (r *postgresRepo) GetStoryLoreNames(ctx context.Context, storyID uuid.UUID) ([]string, error) {
+	rows, err := r.db.Query(ctx, "SELECT entities FROM chapter_lorebooks WHERE story_id = $1", storyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	namesMap := make(map[string]struct{})
+	type Entity struct {
+		Name string `json:"name"`
+	}
+	type Lore struct {
+		Characters []Entity `json:"characters"`
+		Locations  []Entity `json:"locations"`
+		Items      []Entity `json:"items"`
+	}
+
+	for rows.Next() {
+		var rawJSON string
+		if err := rows.Scan(&rawJSON); err != nil {
+			continue
+		}
+		var l Lore
+		if err := json.Unmarshal([]byte(rawJSON), &l); err == nil {
+			for _, c := range l.Characters {
+				namesMap[strings.ToLower(c.Name)] = struct{}{}
+			}
+			for _, c := range l.Locations {
+				namesMap[strings.ToLower(c.Name)] = struct{}{}
+			}
+			for _, c := range l.Items {
+				namesMap[strings.ToLower(c.Name)] = struct{}{}
+			}
+		}
+	}
+
+	var names []string
+	for k := range namesMap {
+		names = append(names, k)
+	}
+	return names, nil
+}
+
+func (r *postgresRepo) GetCanonEntityNames(ctx context.Context, fandomSlug string) ([]string, error) {
+	if fandomSlug == "" {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, "SELECT entity_name FROM canon_lorebooks WHERE fandom_slug = $1 AND entity_name IS NOT NULL", fandomSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil && name != "" {
+			names = append(names, strings.ToLower(name))
+		}
+	}
+	return names, nil
+}
+
+func (r *postgresRepo) UpdateSummaryAndEmbedding(ctx context.Context, storyID uuid.UUID, summary string, embedding []float32) error {
+	query := `
+		INSERT INTO story_lorebooks (story_id, summary, embedding, updated_at)
+		VALUES ($1, $2, $3::vector, $4)
+		ON CONFLICT (story_id) DO UPDATE 
+		SET summary = $2, embedding = $3::vector, updated_at = $4
+	`
+	vecStr := vecToString(embedding)
+	_, err := r.db.Exec(ctx, query, storyID, summary, vecStr, time.Now())
+	return err
+}
+
+func (r *postgresRepo) GetSimilarStories(ctx context.Context, storyID uuid.UUID, limit int) ([]uuid.UUID, error) {
+	var vecStr string
+	err := r.db.QueryRow(ctx, "SELECT embedding::text FROM story_lorebooks WHERE story_id = $1 AND embedding IS NOT NULL", storyID).Scan(&vecStr)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	query := `
+		SELECT story_id 
+		FROM story_lorebooks 
+		WHERE story_id != $1 AND embedding IS NOT NULL
+		ORDER BY embedding <=> $2::vector 
+		LIMIT $3
+	`
+	rows, err := r.db.Query(ctx, query, storyID, vecStr, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+func (r *postgresRepo) SearchStoriesByEmbedding(ctx context.Context, embedding []float32, limit int) ([]uuid.UUID, error) {
+	vecStr := vecToString(embedding)
+
+	query := `
+		SELECT story_id 
+		FROM story_lorebooks 
+		WHERE embedding IS NOT NULL
+		ORDER BY embedding <=> $1::vector 
+		LIMIT $2
+	`
+	rows, err := r.db.Query(ctx, query, vecStr, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
 }

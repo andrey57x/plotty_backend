@@ -158,3 +158,37 @@ func (r *Repository) Publish(ctx context.Context, id uuid.UUID) error {
 	logger.Ctx(ctx).Info().Stringer("chapter_id", id).Msg("chapter_repo: published")
 	return nil
 }
+
+func (r *Repository) AddView(ctx context.Context, chapterID uuid.UUID, userID uint64) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO chapter_views (chapter_id, user_id) 
+		VALUES ($1, $2) 
+		ON CONFLICT DO NOTHING
+	`, chapterID, userID)
+	return err
+}
+
+func (r *Repository) GetStoryAnalytics(ctx context.Context, storyID uuid.UUID) ([]models.ChapterAnalytics, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT c.id, c.title, COUNT(cv.user_id)::int as views
+		FROM chapters c
+		LEFT JOIN chapter_views cv ON c.id = cv.chapter_id
+		WHERE c.story_id = $1 AND c.status = 'published'
+		GROUP BY c.id, c.created_at, c.title
+		ORDER BY c.created_at ASC
+	`, storyID)
+	if err != nil {
+		return nil, fmt.Errorf("chapter_repo.GetStoryAnalytics: %w", err)
+	}
+	defer rows.Close()
+
+	var analytics []models.ChapterAnalytics
+	for rows.Next() {
+		var a models.ChapterAnalytics
+		if err := rows.Scan(&a.ChapterID, &a.Title, &a.Views); err != nil {
+			return nil, err
+		}
+		analytics = append(analytics, a)
+	}
+	return analytics, nil
+}

@@ -64,6 +64,16 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, cont
 		return cachedJob.ID, nil
 	}
 
+	tags, err := u.stories.TagsForStory(ctx, ch.StoryID)
+	var fandomSlug string
+	if err == nil {
+		for _, t := range tags {
+			if t.Category == "directionality" && t.Slug != "originals" {
+				fandomSlug = t.Slug
+			}
+		}
+	}
+
 	payloadBytes, _ := json.Marshal(spellcheckInput{ChapterID: chapterID.String(), Content: text})
 	jobID := uuid.New()
 	now := time.Now().UTC()
@@ -87,6 +97,10 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, cont
 		TaskID:  jobID.String(),
 		Type:    "spellcheck",
 		Payload: string(payloadBytes),
+		Metadata: map[string]string{
+			"story_id":    ch.StoryID.String(),
+			"fandom_slug": fandomSlug,
+		},
 	}
 	body, _ := json.Marshal(task)
 	_ = u.rmqChan.PublishWithContext(ctx, "", "spellcheck_queue", false, false, amqp.Publishing{

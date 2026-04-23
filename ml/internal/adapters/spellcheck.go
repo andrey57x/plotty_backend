@@ -3,7 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"unicode"
+	"strings"
 
 	"github.com/fivecode/plotty/internal/infrastructure/languagetool"
 	"github.com/fivecode/plotty/ml/internal/models"
@@ -19,24 +19,21 @@ func NewLanguageToolAdapter(client *languagetool.Client) *LanguageToolAdapter {
 	}
 }
 
-func isStartOfSentence(text []rune, offset int) bool {
-	for i := offset - 1; i >= 0; i-- {
-		r := text[i]
-		if unicode.IsSpace(r) || r == '"' || r == '«' || r == '»' || r == '\'' || r == '-' || r == '—' {
-			continue
-		}
-		if r == '.' || r == '!' || r == '?' || r == '\n' || r == '…' {
-			return true
-		}
-		return false
-	}
-	return true
-}
-
-func (a *LanguageToolAdapter) CheckText(ctx context.Context, text string) (models.SpellcheckResult, error) {
+func (a *LanguageToolAdapter) CheckText(ctx context.Context, text string, allowedWords []string) (models.SpellcheckResult, error) {
 	resp, err := a.client.Check(ctx, text)
 	if err != nil {
 		return models.SpellcheckResult{}, err
+	}
+
+	allowedMap := make(map[string]struct{}, len(allowedWords))
+	for _, w := range allowedWords {
+		cleanWord := strings.ToLower(strings.TrimSpace(w))
+		if cleanWord != "" {
+			parts := strings.Fields(cleanWord)
+			for _, p := range parts {
+				allowedMap[p] = struct{}{}
+			}
+		}
 	}
 
 	res := models.SpellcheckResult{
@@ -51,11 +48,9 @@ func (a *LanguageToolAdapter) CheckText(ctx context.Context, text string) (model
 			fragment = string(runeText[m.Offset : m.Offset+m.Length])
 		}
 
-		if len(fragment) > 0 {
-			firstRune := []rune(fragment)[0]
-			if unicode.IsUpper(firstRune) && (m.Rule.ID == "MORFOLOGIK_RULE_RU_RU" || m.Rule.ID == "HUNSPELL_RULE" || m.Rule.ID == "HUNSPELL_NO_SUGGEST_RULE") && !isStartOfSentence(runeText, m.Offset) {
-				continue
-			}
+		cleanFrag := strings.ToLower(strings.TrimSpace(fragment))
+		if _, ok := allowedMap[cleanFrag]; ok {
+			continue
 		}
 
 		suggestion := ""
