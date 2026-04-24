@@ -12,6 +12,10 @@ build:
 down:
 	docker compose -f deploy/docker-compose.yml down
 
+# Остановка всех контейнеров с удалением данных
+downv:
+	docker compose -f deploy/docker-compose.yml down -v
+
 # Посмотреть логи всех сервисов в реальном времени
 logs:
 	docker compose -f deploy/docker-compose.yml logs -f

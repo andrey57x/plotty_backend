@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -42,8 +44,18 @@ func RunMigrations(dsn string, migrationsPath string) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	if err := db.Ping(); err != nil {
-		return fmt.Errorf("migrate: ping: %w", err)
+	var pingErr error
+	for i := 0; i < 5; i++ {
+		pingErr = db.Ping()
+		if pingErr == nil {
+			break
+		}
+		log.Printf("[Postgres] Попытка %d: БД еще не готова (%v). Ждем...", i+1, pingErr)
+		time.Sleep(3 * time.Second)
+	}
+
+	if pingErr != nil {
+		return fmt.Errorf("migrate: ping failed after 5 retries: %w", pingErr)
 	}
 
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
