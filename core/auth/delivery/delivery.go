@@ -29,7 +29,8 @@ type AuthUsecase interface {
 	Register(ctx context.Context, email string, password string) (*models.User, string, error)
 	Logout(ctx context.Context, sessionID string) error
 	GetUserBySession(ctx context.Context, sessionID string) (*models.User, error)
-	UpdateProfile(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error)
+	UpdateProfile(ctx context.Context, userID uint64, username *string, avatarURL *string, bio *string) (*models.User, error)
+	GetPublicProfileByUsername(ctx context.Context, username string) (*models.PublicUserProfile, error)
 }
 
 type AvatarStorage interface {
@@ -225,6 +226,7 @@ func (d *AuthDelivery) GetSession(w http.ResponseWriter, r *http.Request) {
 type updateProfileRequest struct {
 	Username  *string `json:"username"`
 	AvatarURL *string `json:"avatarUrl"`
+	Bio       *string `json:"bio"`
 }
 
 func (d *AuthDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -241,12 +243,17 @@ func (d *AuthDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Username == nil && req.AvatarURL == nil {
+	if req.Username == nil && req.AvatarURL == nil && req.Bio == nil {
 		utilities.WriteError(w, http.StatusBadRequest, "nothing to update")
 		return
 	}
 
-	user, err := d.Usecase.UpdateProfile(r.Context(), userID, req.Username, req.AvatarURL)
+	if req.Bio != nil && len(strings.TrimSpace(*req.Bio)) > 5000 {
+		utilities.WriteError(w, http.StatusBadRequest, "bio too long")
+		return
+	}
+
+	user, err := d.Usecase.UpdateProfile(r.Context(), userID, req.Username, req.AvatarURL, req.Bio)
 	if err != nil {
 		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to update profile")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
@@ -341,7 +348,7 @@ func (d *AuthDelivery) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := d.Usecase.UpdateProfile(r.Context(), userID, nil, &url)
+	user, err := d.Usecase.UpdateProfile(r.Context(), userID, nil, &url, nil)
 	if err != nil {
 		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to update avatar url in profile")
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())

@@ -21,7 +21,8 @@ type AuthRepository interface {
 	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
 	CreateUser(ctx context.Context, email, passwordHash string) (*models.User, error)
 	GetUserByID(ctx context.Context, userID uint64) (*models.User, error)
-	UpdateUser(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error)
+	UpdateUser(ctx context.Context, userID uint64, username *string, avatarURL *string, bio *string) (*models.User, error)
+	GetPublicProfileByUsername(ctx context.Context, username string) (*models.PublicUserProfile, error)
 }
 
 func New(repo AuthRepository) *AuthUsecase {
@@ -93,10 +94,10 @@ func (u *AuthUsecase) Logout(ctx context.Context, sessionID string) error {
 	return nil
 }
 
-func (u *AuthUsecase) UpdateProfile(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error) {
+func (u *AuthUsecase) UpdateProfile(ctx context.Context, userID uint64, username *string, avatarURL *string, bio *string) (*models.User, error) {
 	log := logger.FromContext(ctx)
 
-	user, err := u.Repository.UpdateUser(ctx, userID, username, avatarURL)
+	user, err := u.Repository.UpdateUser(ctx, userID, username, avatarURL, bio)
 	if err != nil {
 		log.Error().Err(err).Uint64("user_id", userID).Msg("auth_uc: update profile failed")
 		return nil, fmt.Errorf("auth_uc.UpdateProfile: %w", err)
@@ -104,6 +105,10 @@ func (u *AuthUsecase) UpdateProfile(ctx context.Context, userID uint64, username
 
 	log.Info().Uint64("user_id", userID).Msg("auth_uc: profile updated")
 	return user, nil
+}
+
+func (u *AuthUsecase) GetPublicProfileByUsername(ctx context.Context, username string) (*models.PublicUserProfile, error) {
+	return u.Repository.GetPublicProfileByUsername(ctx, username)
 }
 
 func (u *AuthUsecase) GetUserBySession(ctx context.Context, sessionID string) (*models.User, error) {

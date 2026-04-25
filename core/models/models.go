@@ -102,9 +102,53 @@ type User struct {
 	Email     string     `json:"email"`
 	Username  string     `json:"username"`
 	AvatarURL *string    `json:"avatarUrl,omitempty"`
+	Bio       *string    `json:"bio,omitempty"`
 	Password  string     `json:"-"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+type PublicUserProfile struct {
+	ID        uint64  `json:"id"`
+	Username  string  `json:"username"`
+	AvatarURL *string `json:"avatarUrl,omitempty"`
+	Bio       *string `json:"bio,omitempty"`
+}
+
+type UserCollection struct {
+	ID          uuid.UUID `json:"id"`
+	UserID      uint64    `json:"userId"`
+	Title       string    `json:"title"`
+	Description *string   `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type UserCollectionSummary struct {
+	UserCollection
+	StoriesCount int `json:"storiesCount"`
+}
+
+type UserCollectionDetail struct {
+	UserCollection
+	Stories []StoryListItem `json:"stories"`
+}
+
+type ReaderShelf string
+
+const (
+	ReaderShelfReading  ReaderShelf = "reading"
+	ReaderShelfPlanned  ReaderShelf = "planned"
+	ReaderShelfRead     ReaderShelf = "read"
+	ReaderShelfDropped  ReaderShelf = "dropped"
+	ReaderShelfFavorite ReaderShelf = "favorite"
+)
+
+type ReaderShelfEntry struct {
+	StoryID   uuid.UUID     `json:"storyId"`
+	Shelf     ReaderShelf   `json:"shelf"`
+	UpdatedAt time.Time     `json:"updatedAt"`
+	Story     StoryListItem `json:"story"`
 }
 
 type ChapterAnalytics struct {

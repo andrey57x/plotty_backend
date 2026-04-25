@@ -20,11 +20,15 @@ import (
 	commentrepo "github.com/fivecode/plotty/core/comment/repository"
 	commentuc "github.com/fivecode/plotty/core/comment/usecase"
 	"github.com/fivecode/plotty/core/config"
+	libdeliv "github.com/fivecode/plotty/core/library/delivery"
+	librepo "github.com/fivecode/plotty/core/library/repository"
+	libuc "github.com/fivecode/plotty/core/library/usecase"
 	likedeliv "github.com/fivecode/plotty/core/like/delivery"
 	likerepo "github.com/fivecode/plotty/core/like/repository"
 	likeuc "github.com/fivecode/plotty/core/like/usecase"
 	"github.com/fivecode/plotty/core/middleware"
 	"github.com/fivecode/plotty/core/ml"
+	"github.com/fivecode/plotty/core/profile"
 	"github.com/fivecode/plotty/core/redis"
 	storydeliv "github.com/fivecode/plotty/core/story/delivery"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
@@ -62,6 +66,9 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	lu := likeuc.New(lr)
 	comu := commentuc.New(comr)
 
+	libr := librepo.New(pool)
+	libu := libuc.New(libr, sr)
+
 	sessionDuration := time.Duration(cfg.SessionDurationDays) * 24 * time.Hour
 
 	var st *storage.MinioStorage
@@ -78,6 +85,8 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	authd := authdeliv.New(authu, sessionDuration, st)
 	ld := likedeliv.New(lu)
 	comd := commentdeliv.New(comu)
+	libd := libdeliv.New(libu)
+	prof := profile.New(authu, su, libu)
 
 	go func() {
 		msgs, err := rmqChan.Consume("ml_results_queue", "core_worker", false, false, false, false, nil)
@@ -109,6 +118,12 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	api.HandleFunc("/logout", authd.Logout).Methods(http.MethodPost)
 	api.HandleFunc("/session", authd.GetSession).Methods(http.MethodGet)
 
+	const usernameRe = `[a-zA-Z0-9_]{3,40}`
+	api.HandleFunc("/users/{username:"+usernameRe+"}", prof.GetPublicProfile).Methods(http.MethodGet)
+	api.HandleFunc("/users/{username:"+usernameRe+"}/stories", prof.GetPublicStories).Methods(http.MethodGet)
+	api.HandleFunc("/users/{username:"+usernameRe+"}/collections", prof.GetPublicCollections).Methods(http.MethodGet)
+	api.HandleFunc("/users/{username:"+usernameRe+"}/collections/{collectionId:"+uuidRe+"}", prof.GetPublicCollection).Methods(http.MethodGet)
+
 	api.HandleFunc("/stories", sd.List).Methods(http.MethodGet)
 	api.HandleFunc("/stories/{id:"+uuidRe+"}/similar", sd.GetSimilar).Methods(http.MethodGet)
 
@@ -138,6 +153,18 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 
 	protected.HandleFunc("/profile", authd.UpdateProfile).Methods(http.MethodPatch)
 	protected.HandleFunc("/profile/avatar", authd.UploadAvatar).Methods(http.MethodPost)
+
+	protected.HandleFunc("/me/library/shelf", libd.ListShelf).Methods(http.MethodGet)
+	protected.HandleFunc("/me/library/shelf/{storyId:"+uuidRe+"}", libd.PutShelf).Methods(http.MethodPut)
+	protected.HandleFunc("/me/library/shelf/{storyId:"+uuidRe+"}", libd.DeleteShelf).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/me/collections", libd.ListMyCollections).Methods(http.MethodGet)
+	protected.HandleFunc("/me/collections", libd.CreateCollection).Methods(http.MethodPost)
+	protected.HandleFunc("/me/collections/{id:"+uuidRe+"}", libd.GetMyCollection).Methods(http.MethodGet)
+	protected.HandleFunc("/me/collections/{id:"+uuidRe+"}", libd.PatchCollection).Methods(http.MethodPatch)
+	protected.HandleFunc("/me/collections/{id:"+uuidRe+"}", libd.DeleteCollection).Methods(http.MethodDelete)
+	protected.HandleFunc("/me/collections/{id:"+uuidRe+"}/stories", libd.AddStoryToCollection).Methods(http.MethodPost)
+	protected.HandleFunc("/me/collections/{id:"+uuidRe+"}/stories/{storyId:"+uuidRe+"}", libd.RemoveStoryFromCollection).Methods(http.MethodDelete)
 
 	api.HandleFunc("/stories/{slug}", sd.GetBySlug).Methods(http.MethodGet)
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}/view", cd.AddView).Methods(http.MethodPost)

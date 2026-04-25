@@ -217,6 +217,72 @@ func (u *Usecase) ListMy(ctx context.Context, q string, tagSlugs []string, page,
 	return items, total, nil
 }
 
+func (u *Usecase) ListPublishedByAuthor(ctx context.Context, authorID uint64, q string, tagSlugs []string, page, pageSize int) ([]models.StoryListItem, int, error) {
+	log := logger.FromContext(ctx)
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	offset := (page - 1) * pageSize
+
+	total, err := u.stories.CountPublishedByAuthor(ctx, authorID, q, tagSlugs)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: CountPublishedByAuthor failed")
+		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor count: %w", err)
+	}
+	ids, err := u.stories.ListPublishedIDsByAuthor(ctx, authorID, q, tagSlugs, pageSize, offset)
+	if err != nil {
+		log.Error().Err(err).Msg("story_uc: ListPublishedIDsByAuthor failed")
+		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor ids: %w", err)
+	}
+	if len(ids) == 0 {
+		return []models.StoryListItem{}, total, nil
+	}
+
+	byID, err := u.stories.LoadStoriesByIDs(ctx, ids)
+	if err != nil {
+		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor load: %w", err)
+	}
+	tagsMap, err := u.stories.TagsForStories(ctx, ids)
+	if err != nil {
+		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor tags: %w", err)
+	}
+	counts, err := u.stories.ChapterCountsPublished(ctx, ids)
+	if err != nil {
+		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor chapter counts: %w", err)
+	}
+	likes, err := u.stories.LikeCounts(ctx, ids)
+	if err != nil {
+		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor likes: %w", err)
+	}
+	authors, err := u.stories.AuthorsForStories(ctx, ids)
+	if err != nil {
+		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor authors: %w", err)
+	}
+
+	items := make([]models.StoryListItem, 0, len(ids))
+	for _, id := range ids {
+		s, ok := byID[id]
+		if !ok {
+			continue
+		}
+		items = append(items, models.StoryListItem{
+			Story:         s,
+			Tags:          tagsMap[id],
+			ChaptersCount: counts[id],
+			LikesCount:    likes[id],
+			Author:        authors[id],
+		})
+	}
+	return items, total, nil
+}
+
 func (u *Usecase) Create(ctx context.Context, title string, tagIDs []uuid.UUID) (*models.Story, error) {
 	log := logger.FromContext(ctx)
 

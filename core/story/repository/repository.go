@@ -405,6 +405,100 @@ func (r *Repository) CountMyList(ctx context.Context, userID uint64, q string, t
 	return total, nil
 }
 
+func (r *Repository) ListPublishedIDsByAuthor(ctx context.Context, authorID uint64, q string, tagSlugs []string, limit, offset int) ([]uuid.UUID, error) {
+	tagSlugs = dedupeStrings(tagSlugs)
+	groups, found, err := r.groupTagSlugsByCategory(ctx, tagSlugs)
+	if err != nil {
+		return nil, err
+	}
+	if len(tagSlugs) > 0 && found != len(tagSlugs) {
+		return []uuid.UUID{}, nil
+	}
+
+	args := []any{authorID, q, limit, offset}
+	whereTags := ""
+	if len(groups) > 0 {
+		for _, slugs := range groups {
+			args = append(args, slugs)
+			ph := len(args)
+			whereTags += fmt.Sprintf(`
+				AND EXISTS (
+					SELECT 1
+					FROM story_tags st
+					JOIN tags tg ON tg.id = st.tag_id
+					WHERE st.story_id = s.id AND tg.slug = ANY($%d::text[])
+				)
+			`, ph)
+		}
+	}
+
+	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
+		SELECT s.id
+		FROM stories s
+		WHERE s.author_id = $1
+		AND s.status = 'published'
+		AND ($2 = '' OR s.title ILIKE '%%' || $2 || '%%')
+		%s
+		ORDER BY s.updated_at DESC
+		LIMIT $3 OFFSET $4
+	`, whereTags), args...)
+	if err != nil {
+		return nil, fmt.Errorf("story_repo.ListPublishedIDsByAuthor: %w", err)
+	}
+	defer rows.Close()
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (r *Repository) CountPublishedByAuthor(ctx context.Context, authorID uint64, q string, tagSlugs []string) (int, error) {
+	tagSlugs = dedupeStrings(tagSlugs)
+	groups, found, err := r.groupTagSlugsByCategory(ctx, tagSlugs)
+	if err != nil {
+		return 0, err
+	}
+	if len(tagSlugs) > 0 && found != len(tagSlugs) {
+		return 0, nil
+	}
+
+	args := []any{authorID, q}
+	whereTags := ""
+	if len(groups) > 0 {
+		for _, slugs := range groups {
+			args = append(args, slugs)
+			ph := len(args)
+			whereTags += fmt.Sprintf(`
+				AND EXISTS (
+					SELECT 1
+					FROM story_tags st
+					JOIN tags tg ON tg.id = st.tag_id
+					WHERE st.story_id = s.id AND tg.slug = ANY($%d::text[])
+				)
+			`, ph)
+		}
+	}
+
+	var total int
+	err = r.pool.QueryRow(ctx, fmt.Sprintf(`
+		SELECT COUNT(*)::int
+		FROM stories s
+		WHERE s.author_id = $1
+		AND s.status = 'published'
+		AND ($2 = '' OR s.title ILIKE '%%' || $2 || '%%')
+		%s
+	`, whereTags), args...).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("story_repo.CountPublishedByAuthor: %w", err)
+	}
+	return total, nil
+}
+
 func (r *Repository) LoadStoriesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]models.Story, error) {
 	if len(ids) == 0 {
 		return map[uuid.UUID]models.Story{}, nil

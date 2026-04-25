@@ -64,10 +64,10 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 	log := logger.FromContext(ctx)
 	log.Info().Str("email", email).Msg("getting user by email from PostgreSQL")
 
-	query := `SELECT id, email, password_hash, username, avatar_url, created_at, updated_at FROM users WHERE email = $1`
+	query := `SELECT id, email, password_hash, username, avatar_url, bio, created_at, updated_at FROM users WHERE email = $1`
 
 	user := &models.User{}
-	var avatarURL sql.NullString
+	var avatarURL, bio sql.NullString
 	var updatedAt sql.NullTime
 
 	err := r.Pool.QueryRow(ctx, query, email).Scan(
@@ -76,6 +76,7 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 		&user.Password,
 		&user.Username,
 		&avatarURL,
+		&bio,
 		&user.CreatedAt,
 		&updatedAt,
 	)
@@ -91,6 +92,9 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 
 	if avatarURL.Valid {
 		user.AvatarURL = &avatarURL.String
+	}
+	if bio.Valid {
+		user.Bio = &bio.String
 	}
 	if updatedAt.Valid {
 		user.UpdatedAt = &updatedAt.Time
@@ -108,11 +112,11 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 	query := `
 		INSERT INTO users (email, password_hash, username)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, password_hash, username, avatar_url, created_at, updated_at
+		RETURNING id, email, password_hash, username, avatar_url, bio, created_at, updated_at
 	`
 
 	user := &models.User{}
-	var avatarURL sql.NullString
+	var avatarURL, bio sql.NullString
 	var updatedAt sql.NullTime
 
 	err := r.Pool.QueryRow(ctx, query, email, passwordHash, username).Scan(
@@ -121,6 +125,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 		&user.Password,
 		&user.Username,
 		&avatarURL,
+		&bio,
 		&user.CreatedAt,
 		&updatedAt,
 	)
@@ -137,6 +142,9 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 	if avatarURL.Valid {
 		user.AvatarURL = &avatarURL.String
 	}
+	if bio.Valid {
+		user.Bio = &bio.String
+	}
 	if updatedAt.Valid {
 		user.UpdatedAt = &updatedAt.Time
 	}
@@ -145,7 +153,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 	return user, nil
 }
 
-func (r *AuthRepository) UpdateUser(ctx context.Context, userID uint64, username *string, avatarURL *string) (*models.User, error) {
+func (r *AuthRepository) UpdateUser(ctx context.Context, userID uint64, username *string, avatarURL *string, bio *string) (*models.User, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Msg("updating user profile")
 
@@ -166,11 +174,20 @@ func (r *AuthRepository) UpdateUser(ctx context.Context, userID uint64, username
 			newAvatar = avatarURL
 		}
 	}
+	newBio := cur.Bio
+	if bio != nil {
+		t := strings.TrimSpace(*bio)
+		if t == "" {
+			newBio = nil
+		} else {
+			newBio = &t
+		}
+	}
 
 	_, err = r.Pool.Exec(ctx, `
-		UPDATE users SET username = $2, avatar_url = $3, updated_at = CURRENT_TIMESTAMP
+		UPDATE users SET username = $2, avatar_url = $3, bio = $4, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1
-	`, userID, newUsername, newAvatar)
+	`, userID, newUsername, newAvatar, newBio)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
 			return nil, namederrors.ErrConflict
@@ -186,10 +203,10 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Msg("getting user by id from PostgreSQL")
 
-	query := `SELECT id, email, password_hash, username, avatar_url, created_at, updated_at FROM users WHERE id = $1`
+	query := `SELECT id, email, password_hash, username, avatar_url, bio, created_at, updated_at FROM users WHERE id = $1`
 
 	user := &models.User{}
-	var avatarURL sql.NullString
+	var avatarURL, bio sql.NullString
 	var updatedAt sql.NullTime
 
 	err := r.Pool.QueryRow(ctx, query, userID).Scan(
@@ -198,6 +215,7 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 		&user.Password,
 		&user.Username,
 		&avatarURL,
+		&bio,
 		&user.CreatedAt,
 		&updatedAt,
 	)
@@ -214,9 +232,37 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 	if avatarURL.Valid {
 		user.AvatarURL = &avatarURL.String
 	}
+	if bio.Valid {
+		user.Bio = &bio.String
+	}
 	if updatedAt.Valid {
 		user.UpdatedAt = &updatedAt.Time
 	}
 
 	return user, nil
+}
+
+func (r *AuthRepository) GetPublicProfileByUsername(ctx context.Context, username string) (*models.PublicUserProfile, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, namederrors.ErrNotFound
+	}
+	var p models.PublicUserProfile
+	var avatarURL, bio sql.NullString
+	err := r.Pool.QueryRow(ctx, `
+		SELECT id, username, avatar_url, bio FROM users WHERE username = $1
+	`, username).Scan(&p.ID, &p.Username, &avatarURL, &bio)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, namederrors.ErrNotFound
+		}
+		return nil, fmt.Errorf("auth_repo.GetPublicProfileByUsername: %w", err)
+	}
+	if avatarURL.Valid {
+		p.AvatarURL = &avatarURL.String
+	}
+	if bio.Valid {
+		p.Bio = &bio.String
+	}
+	return &p, nil
 }
