@@ -424,6 +424,31 @@ func (u *Usecase) GetBySlug(ctx context.Context, storySlug string) (*models.Stor
 	}, nil
 }
 
+func (u *Usecase) GetChaptersViewedBySlug(ctx context.Context, storySlug string) ([]models.ChapterViewed, error) {
+	log := logger.FromContext(ctx)
+
+	s, err := u.stories.GetBySlug(ctx, storySlug)
+	if err != nil {
+		return nil, fmt.Errorf("story_uc.GetChaptersViewedBySlug story: %w", err)
+	}
+	if s.Status != "published" {
+		if err := u.checkAuthor(ctx, s.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	var uid *uint64
+	if u, ok := middleware.GetUserID(ctx); ok {
+		uid = &u
+	}
+	items, err := u.chapters.ListViewedByStoryPublished(ctx, s.ID, uid)
+	if err != nil {
+		log.Error().Err(err).Stringer("story_id", s.ID).Msg("story_uc: ListViewedByStoryPublished failed")
+		return nil, fmt.Errorf("story_uc.GetChaptersViewedBySlug chapters: %w", err)
+	}
+	return items, nil
+}
+
 func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := u.checkAuthor(ctx, id); err != nil {
 		return err

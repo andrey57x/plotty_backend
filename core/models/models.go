@@ -156,3 +156,9 @@ type ChapterAnalytics struct {
 	Title     string    `json:"title"`
 	Views     int       `json:"views"`
 }
+
+type ChapterViewed struct {
+	ChapterID uuid.UUID `json:"chapterId"`
+	Title     string    `json:"title"`
+	Viewed    bool      `json:"viewed"`
+}

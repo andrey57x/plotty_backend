@@ -168,6 +168,52 @@ func (r *Repository) AddView(ctx context.Context, chapterID uuid.UUID, userID ui
 	return err
 }
 
+func (r *Repository) HasView(ctx context.Context, chapterID uuid.UUID, userID uint64) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM chapter_views
+			WHERE chapter_id = $1 AND user_id = $2
+		)
+	`, chapterID, userID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("chapter_repo.HasView: %w", err)
+	}
+	return exists, nil
+}
+
+func (r *Repository) ListViewedByStoryPublished(ctx context.Context, storyID uuid.UUID, userID *uint64) ([]models.ChapterViewed, error) {
+	var uid any = nil
+	if userID != nil {
+		uid = int64(*userID)
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT c.id, c.title, (cv.user_id IS NOT NULL) AS viewed
+		FROM chapters c
+		LEFT JOIN chapter_views cv 
+			ON cv.chapter_id = c.id AND cv.user_id = $2
+		WHERE c.story_id = $1 AND c.status = 'published'
+		ORDER BY c.created_at ASC, c.id ASC
+	`, storyID, uid)
+	if err != nil {
+		return nil, fmt.Errorf("chapter_repo.ListViewedByStoryPublished: %w", err)
+	}
+	defer rows.Close()
+
+	var out []models.ChapterViewed
+	for rows.Next() {
+		var v models.ChapterViewed
+		if err := rows.Scan(&v.ChapterID, &v.Title, &v.Viewed); err != nil {
+			return nil, fmt.Errorf("chapter_repo.ListViewedByStoryPublished scan: %w", err)
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("chapter_repo.ListViewedByStoryPublished rows: %w", err)
+	}
+	return out, nil
+}
+
 func (r *Repository) GetStoryAnalytics(ctx context.Context, storyID uuid.UUID) ([]models.ChapterAnalytics, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT c.id, c.title, COUNT(cv.user_id)::int as views

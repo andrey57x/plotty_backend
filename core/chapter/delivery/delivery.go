@@ -172,3 +172,22 @@ func (d *Delivery) AddView(w http.ResponseWriter, r *http.Request) {
 	_ = d.uc.AddView(r.Context(), id)
 	w.WriteHeader(http.StatusOK)
 }
+
+func (d *Delivery) IsViewed(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	viewed, err := d.uc.IsViewed(r.Context(), id)
+	if err != nil {
+		log.Warn().Err(err).Stringer("chapter_id", id).Msg("chapter_delivery: is_viewed failed")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, map[string]any{"viewed": viewed})
+}

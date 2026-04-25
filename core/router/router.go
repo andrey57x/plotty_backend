@@ -167,7 +167,9 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected.HandleFunc("/me/collections/{id:"+uuidRe+"}/stories/{storyId:"+uuidRe+"}", libd.RemoveStoryFromCollection).Methods(http.MethodDelete)
 
 	api.HandleFunc("/stories/{slug}", sd.GetBySlug).Methods(http.MethodGet)
+	api.HandleFunc("/stories/{slug}/chapters/viewed", sd.GetChaptersViewed).Methods(http.MethodGet)
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}/view", cd.AddView).Methods(http.MethodPost)
+	api.HandleFunc("/chapters/{id:"+uuidRe+"}/viewed", cd.IsViewed).Methods(http.MethodGet)
 
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}", cd.Get).Methods(http.MethodGet)
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}/wiki", cd.GetWiki).Methods(http.MethodGet)

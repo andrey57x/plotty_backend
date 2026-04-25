@@ -287,3 +287,11 @@ func (u *Usecase) AddView(ctx context.Context, chapterID uuid.UUID) error {
 	}
 	return u.chapters.AddView(ctx, chapterID, userID)
 }
+
+func (u *Usecase) IsViewed(ctx context.Context, chapterID uuid.UUID) (bool, error) {
+	userID, ok := middleware.GetUserID(ctx)
+	if !ok {
+		return false, nil
+	}
+	return u.chapters.HasView(ctx, chapterID, userID)
+}

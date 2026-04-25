@@ -180,6 +180,27 @@ func (d *Delivery) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	utilities.WriteJSON(w, http.StatusOK, detail)
 }
 
+func (d *Delivery) GetChaptersViewed(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	slug := strings.TrimSpace(mux.Vars(r)["slug"])
+	if slug == "" {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid slug")
+		return
+	}
+
+	items, err := d.uc.GetChaptersViewedBySlug(r.Context(), slug)
+	if err != nil {
+		log.Warn().Err(err).Str("slug", slug).Msg("story_delivery: get chapters viewed failed")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, map[string]any{
+		"items": items,
+	})
+}
+
 func (d *Delivery) Delete(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 
