@@ -76,12 +76,16 @@ func (d *Delivery) Patch(w http.ResponseWriter, r *http.Request) {
 }
 
 type chapterGetResponse struct {
-	ID        uuid.UUID `json:"id"`
-	StoryID   uuid.UUID `json:"storyId"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	UpdatedAt string    `json:"updatedAt"`
-	ImageURL  *string   `json:"imageUrl,omitempty"`
+	ID                    uuid.UUID `json:"id"`
+	StoryID               uuid.UUID `json:"storyId"`
+	Title                 string    `json:"title"`
+	Content               string    `json:"content"`
+	DraftTitle            *string   `json:"draftTitle,omitempty"`
+	DraftContent          *string   `json:"draftContent,omitempty"`
+	HasUnpublishedChanges bool      `json:"hasUnpublishedChanges"`
+	UpdatedAt             string    `json:"updatedAt"`
+	ImageURL              *string   `json:"imageUrl,omitempty"`
+	Status                string    `json:"status"`
 }
 
 func (d *Delivery) Get(w http.ResponseWriter, r *http.Request) {
@@ -98,14 +102,26 @@ func (d *Delivery) Get(w http.ResponseWriter, r *http.Request) {
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
 	}
-	utilities.WriteJSON(w, http.StatusOK, chapterGetResponse{
+
+	resp := chapterGetResponse{
 		ID:        ch.ID,
 		StoryID:   ch.StoryID,
-		Title:     ch.Title,
-		Content:   ch.Content,
 		UpdatedAt: ch.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		ImageURL:  ch.ImageURL,
-	})
+		Status:    ch.Status,
+		Title:     ch.Title,
+		Content:   ch.Content,
+	}
+
+	if ch.IsAuthor {
+		resp.DraftTitle = &ch.DraftTitle
+		resp.DraftContent = &ch.DraftContent
+		resp.HasUnpublishedChanges = (ch.Title != ch.DraftTitle || ch.Content != ch.DraftContent)
+	} else {
+		resp.HasUnpublishedChanges = false
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (d *Delivery) Delete(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +184,7 @@ func (d *Delivery) AddView(w http.ResponseWriter, r *http.Request) {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	
+
 	_ = d.uc.AddView(r.Context(), id)
 	w.WriteHeader(http.StatusOK)
 }
@@ -190,4 +206,23 @@ func (d *Delivery) IsViewed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utilities.WriteJSON(w, http.StatusOK, map[string]any{"viewed": viewed})
+}
+
+func (d *Delivery) DiscardDraft(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	ch, err := d.uc.DiscardDraft(r.Context(), id)
+	if err != nil {
+		log.Warn().Err(err).Stringer("chapter_id", id).Msg("chapter_delivery: discard draft failed")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+
+	utilities.WriteJSON(w, http.StatusOK, ch)
 }

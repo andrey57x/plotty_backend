@@ -25,10 +25,10 @@ func New(pool *pgxpool.Pool) *Repository {
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*models.Chapter, error) {
 	var c models.Chapter
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, story_id, title, content, status, created_at, updated_at
+		SELECT id, story_id, title, content, draft_title, draft_content, status, created_at, updated_at
 		FROM chapters WHERE id = $1
 	`, id).Scan(
-		&c.ID, &c.StoryID, &c.Title, &c.Content, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+		&c.ID, &c.StoryID, &c.Title, &c.Content, &c.DraftTitle, &c.DraftContent, &c.Status, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, named_errors.ErrNotFound
@@ -45,9 +45,9 @@ func (r *Repository) Create(ctx context.Context, storyID uuid.UUID, title, conte
 	id := uuid.New()
 	now := time.Now().UTC()
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO chapters (id, story_id, title, content, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, id, storyID, title, content, "draft", now, now)
+		INSERT INTO chapters (id, story_id, title, content, draft_title, draft_content, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`, id, storyID, title, content, title, content, "draft", now, now)
 	if err != nil {
 		log.Error().Err(err).Stringer("story_id", storyID).Msg("chapter_repo: insert failed")
 		return nil, fmt.Errorf("chapter_repo.Create: %w", err)
@@ -55,7 +55,7 @@ func (r *Repository) Create(ctx context.Context, storyID uuid.UUID, title, conte
 
 	log.Info().Stringer("chapter_id", id).Stringer("story_id", storyID).Msg("chapter_repo: created")
 	return &models.Chapter{
-		ID: id, StoryID: storyID, Title: title, Content: content, Status: "draft",
+		ID: id, StoryID: storyID, Title: title, Content: content, DraftTitle: title, DraftContent: content, Status: "draft",
 		CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
@@ -67,8 +67,8 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, title *string, co
 	if err != nil {
 		return nil, fmt.Errorf("chapter_repo.Update get current: %w", err)
 	}
-	newTitle := c.Title
-	newContent := c.Content
+	newTitle := c.DraftTitle
+	newContent := c.DraftContent
 	if title != nil {
 		newTitle = *title
 	}
@@ -77,7 +77,7 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, title *string, co
 	}
 	now := time.Now().UTC()
 	cmd, err := r.pool.Exec(ctx, `
-		UPDATE chapters SET title = $2, content = $3, updated_at = $4
+		UPDATE chapters SET draft_title = $2, draft_content = $3, updated_at = $4
 		WHERE id = $1
 	`, id, newTitle, newContent, now)
 	if err != nil {
@@ -87,8 +87,8 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, title *string, co
 	if cmd.RowsAffected() == 0 {
 		return nil, named_errors.ErrNotFound
 	}
-	c.Title = newTitle
-	c.Content = newContent
+	c.DraftTitle = newTitle
+	c.DraftContent = newContent
 	c.UpdatedAt = now
 
 	log.Info().Stringer("chapter_id", id).Msg("chapter_repo: updated")
@@ -147,7 +147,14 @@ func (r *Repository) ListBriefByStory(ctx context.Context, storyID uuid.UUID) ([
 }
 
 func (r *Repository) Publish(ctx context.Context, id uuid.UUID) error {
-	cmd, err := r.pool.Exec(ctx, `UPDATE chapters SET status = 'published', updated_at = $2 WHERE id = $1`, id, time.Now().UTC())
+	cmd, err := r.pool.Exec(ctx, `
+		UPDATE chapters 
+		SET status = 'published', 
+			title = draft_title, 
+			content = draft_content, 
+			updated_at = $2 
+		WHERE id = $1
+	`, id, time.Now().UTC())
 	if err != nil {
 		logger.Ctx(ctx).Error().Err(err).Stringer("chapter_id", id).Msg("chapter_repo: publish failed")
 		return fmt.Errorf("chapter_repo.Publish: %w", err)
@@ -237,4 +244,23 @@ func (r *Repository) GetStoryAnalytics(ctx context.Context, storyID uuid.UUID) (
 		analytics = append(analytics, a)
 	}
 	return analytics, nil
+}
+
+func (r *Repository) DiscardDraft(ctx context.Context, id uuid.UUID) error {
+	cmd, err := r.pool.Exec(ctx, `
+		UPDATE chapters 
+		SET draft_title = title, 
+			draft_content = content, 
+			updated_at = $2 
+		WHERE id = $1
+	`, id, time.Now().UTC())
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Stringer("chapter_id", id).Msg("chapter_repo: discard draft failed")
+		return fmt.Errorf("chapter_repo.DiscardDraft: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return named_errors.ErrNotFound
+	}
+	logger.Ctx(ctx).Info().Stringer("chapter_id", id).Msg("chapter_repo: draft discarded")
+	return nil
 }

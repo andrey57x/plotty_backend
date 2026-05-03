@@ -361,7 +361,7 @@ func (u *Usecase) StartCanonCheck(ctx context.Context, chapterID uuid.UUID) (uui
 
 	jobID := uuid.New()
 	now := time.Now().UTC()
-	contentHash := sha256Hex(ch.Content)
+	contentHash := sha256Hex(ch.DraftContent)
 
 	job := models.AIJob{
 		ID:           jobID,
@@ -382,7 +382,7 @@ func (u *Usecase) StartCanonCheck(ctx context.Context, chapterID uuid.UUID) (uui
 		TaskID:  jobID.String(),
 		TraceID: uuid.NewString(),
 		Type:    "canon_check",
-		Payload: ch.Content,
+		Payload: ch.DraftContent,
 		Metadata: map[string]string{
 			"story_id":    ch.StoryID.String(),
 			"fandom_slug": fandomSlug,

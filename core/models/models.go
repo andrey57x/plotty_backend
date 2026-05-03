@@ -65,13 +65,15 @@ type ChapterBrief struct {
 }
 
 type Chapter struct {
-	ID        uuid.UUID `json:"id"`
-	StoryID   uuid.UUID `json:"storyId"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID           uuid.UUID `json:"id"`
+	StoryID      uuid.UUID `json:"storyId"`
+	Title        string    `json:"title"`
+	Content      string    `json:"content"`
+	DraftTitle   string    `json:"draftTitle"`
+	DraftContent string    `json:"draftContent"`
+	Status       string    `json:"status"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 type AIJob struct {

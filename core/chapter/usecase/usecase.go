@@ -92,34 +92,6 @@ func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, conte
 		return nil, fmt.Errorf("chapter_uc.Update: %w", err)
 	}
 
-	if ch.Status == "published" && content != nil {
-		briefs, errBriefs := u.chapters.ListBriefByStory(ctx, ch.StoryID)
-		var prevChapterID string
-		if errBriefs == nil {
-			for _, b := range briefs {
-				if b.ID == ch.ID {
-					break
-				}
-				if b.Status == "published" {
-					prevChapterID = b.ID.String()
-				}
-			}
-		}
-
-		loreTask := rabbitmq.MLTaskMessage{
-			TaskID:  uuid.NewString(),
-			TraceID: uuid.NewString(),
-			Type:    "extract_lore",
-			Payload: ch.Content,
-			Metadata: map[string]string{
-				"story_id":        ch.StoryID.String(),
-				"chapter_id":      ch.ID.String(),
-				"prev_chapter_id": prevChapterID,
-			},
-		}
-		u.publishToRabbitMQ(ctx, loreTask)
-	}
-
 	log.Info().Stringer("chapter_id", id).Msg("chapter_uc: updated")
 	return ch, nil
 }
@@ -127,6 +99,7 @@ func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title *string, conte
 type ChapterWithImage struct {
 	models.Chapter
 	ImageURL *string
+	IsAuthor bool
 }
 
 func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*ChapterWithImage, error) {
@@ -134,9 +107,12 @@ func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*ChapterWithImage, err
 	if err != nil {
 		return nil, fmt.Errorf("chapter_uc.Get: %w", err)
 	}
-	if ch.Status != "published" && u.authChecker != nil {
-		if err := u.authChecker.CheckAuthorByChapter(ctx, id); err != nil {
-			return nil, err
+	isAuthor := false
+	if u.authChecker != nil {
+		if errAuth := u.authChecker.CheckAuthorByChapter(ctx, id); errAuth == nil {
+			isAuthor = true
+		} else if ch.Status != "published" {
+			return nil, errAuth
 		}
 	}
 	imgURL, err := u.chapters.GetLatestImageURL(ctx, id)
@@ -144,7 +120,7 @@ func (u *Usecase) Get(ctx context.Context, id uuid.UUID) (*ChapterWithImage, err
 		logger.Ctx(ctx).Error().Err(err).Stringer("chapter_id", id).Msg("chapter_uc: get image url failed")
 		return nil, fmt.Errorf("chapter_uc.Get image: %w", err)
 	}
-	return &ChapterWithImage{Chapter: *ch, ImageURL: imgURL}, nil
+	return &ChapterWithImage{Chapter: *ch, ImageURL: imgURL, IsAuthor: isAuthor}, nil
 }
 
 func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
@@ -168,13 +144,14 @@ func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
 			return err
 		}
 	}
-	ch, err := u.chapters.GetByID(ctx, chapterID)
-	if err != nil {
-		return fmt.Errorf("chapter_uc.Publish get chapter: %w", err)
-	}
 
 	if err := u.chapters.Publish(ctx, chapterID); err != nil {
 		return fmt.Errorf("chapter_uc.Publish chapter: %w", err)
+	}
+
+	ch, err := u.chapters.GetByID(ctx, chapterID)
+	if err != nil {
+		return fmt.Errorf("chapter_uc.Publish get chapter: %w", err)
 	}
 
 	if err := u.stories.Publish(ctx, ch.StoryID); err != nil {
@@ -227,6 +204,18 @@ func (u *Usecase) Publish(ctx context.Context, chapterID uuid.UUID) error {
 
 	log.Info().Stringer("chapter_id", chapterID).Stringer("story_id", ch.StoryID).Msg("chapter_uc: published")
 	return nil
+}
+
+func (u *Usecase) DiscardDraft(ctx context.Context, chapterID uuid.UUID) (*models.Chapter, error) {
+	if u.authChecker != nil {
+		if err := u.authChecker.CheckAuthorByChapter(ctx, chapterID); err != nil {
+			return nil, err
+		}
+	}
+	if err := u.chapters.DiscardDraft(ctx, chapterID); err != nil {
+		return nil, fmt.Errorf("chapter_uc.DiscardDraft: %w", err)
+	}
+	return u.chapters.GetByID(ctx, chapterID)
 }
 
 func (u *Usecase) publishToRabbitMQ(ctx context.Context, task rabbitmq.MLTaskMessage) {
