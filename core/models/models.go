@@ -164,3 +164,14 @@ type ChapterViewed struct {
 	Title     string    `json:"title"`
 	Viewed    bool      `json:"viewed"`
 }
+
+type CreditTransaction struct {
+	ID           uuid.UUID `json:"id"`
+	UserID       uint64    `json:"userId"`
+	Amount       int       `json:"amount"`
+	Type         string    `json:"type"`
+	Description  *string   `json:"description,omitempty"`
+	PaymentLabel *string   `json:"paymentLabel,omitempty"`
+	Status       string    `json:"status"`
+	CreatedAt    time.Time `json:"createdAt"`
+}

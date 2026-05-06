@@ -5,6 +5,7 @@ import (
 
 	aiuc "github.com/fivecode/plotty/core/ai/usecase"
 	"github.com/fivecode/plotty/core/constants"
+	"github.com/fivecode/plotty/core/middleware"
 	"github.com/fivecode/plotty/core/utilities"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -24,12 +25,17 @@ type spellcheckBody struct {
 }
 
 func (d *Delivery) Spellcheck(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		utilities.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	var body spellcheckBody
 	if err := utilities.DecodeJSON(r, &body); err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	jobID, err := d.uc.StartSpellcheck(r.Context(), body.ChapterID, body.Content)
+	jobID, err := d.uc.StartSpellcheck(r.Context(), userID, body.ChapterID, body.Content)
 	if err != nil {
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
@@ -47,12 +53,17 @@ type imageGenBody struct {
 }
 
 func (d *Delivery) ImageGeneration(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		utilities.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	var body imageGenBody
 	if err := utilities.DecodeJSON(r, &body); err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	jobID, err := d.uc.StartImageGeneration(r.Context(), body.ChapterID, body.Content, body.Prompt)
+	jobID, err := d.uc.StartImageGeneration(r.Context(), userID, body.ChapterID, body.Content, body.Prompt)
 	if err != nil {
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
@@ -78,12 +89,17 @@ func (d *Delivery) GetJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Delivery) LogicCheck(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		utilities.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	var body spellcheckBody
 	if err := utilities.DecodeJSON(r, &body); err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	jobID, err := d.uc.StartLogicCheck(r.Context(), body.ChapterID, body.Content)
+	jobID, err := d.uc.StartLogicCheck(r.Context(), userID, body.ChapterID, body.Content)
 	if err != nil {
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return
@@ -95,12 +111,17 @@ func (d *Delivery) LogicCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Delivery) CanonCheck(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		utilities.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	chapterID, err := uuid.Parse(mux.Vars(r)["id"])
 	if err != nil {
 		utilities.WriteError(w, http.StatusBadRequest, "invalid chapter id")
 		return
 	}
-	jobID, err := d.uc.StartCanonCheck(r.Context(), chapterID)
+	jobID, err := d.uc.StartCanonCheck(r.Context(), userID, chapterID)
 	if err != nil {
 		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
 		return

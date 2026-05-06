@@ -104,6 +104,8 @@ func StatusFromErr(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, named_errors.ErrNoAccess):
 		return http.StatusForbidden
+	case errors.Is(err, named_errors.ErrInsufficientCredits):
+		return http.StatusPaymentRequired
 	default:
 		return http.StatusInternalServerError
 	}

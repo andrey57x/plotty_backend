@@ -10,4 +10,5 @@ var (
 	ErrInvalidEmailOrPassword = errors.New("invalid email or password")
 	ErrInvalidSession         = errors.New("invalid session")
 	ErrNoAccess               = errors.New("no access")
+	ErrInsufficientCredits    = errors.New("insufficient credits")
 )

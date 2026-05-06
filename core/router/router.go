@@ -13,6 +13,9 @@ import (
 	authdeliv "github.com/fivecode/plotty/core/auth/delivery"
 	authrepo "github.com/fivecode/plotty/core/auth/repository"
 	authuc "github.com/fivecode/plotty/core/auth/usecase"
+	creddeliv "github.com/fivecode/plotty/core/credits/delivery"
+	credrepo "github.com/fivecode/plotty/core/credits/repository"
+	creduc "github.com/fivecode/plotty/core/credits/usecase"
 	chdeliv "github.com/fivecode/plotty/core/chapter/delivery"
 	chrepo "github.com/fivecode/plotty/core/chapter/repository"
 	chuc "github.com/fivecode/plotty/core/chapter/usecase"
@@ -53,6 +56,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	authr := authrepo.New(pool, redisDB)
 	lr := likerepo.New(pool)
 	comr := commentrepo.New(pool)
+	credr := credrepo.New(pool)
 
 	tu := taguc.New(tr)
 	mlClient := ml.NewClient(cfg.MLBaseURL)
@@ -61,7 +65,8 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	cu := chuc.New(cr, sr, rmqChan, mlClient)
 	cu.SetAuthorChecker(su)
 
-	au := aiuc.New(ar, cr, sr, rmqChan)
+	credu := creduc.New(credr, cfg.YooMoneyWallet, cfg.YooMoneySecret, cfg.FrontendURL)
+	au := aiuc.New(ar, cr, sr, rmqChan, credr)
 	authu := authuc.New(authr)
 	lu := likeuc.New(lr)
 	comu := commentuc.New(comr)
@@ -87,6 +92,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	comd := commentdeliv.New(comu)
 	libd := libdeliv.New(libu)
 	prof := profile.New(authu, su, libu)
+	credd := creddeliv.New(credu)
 
 	go func() {
 		msgs, err := rmqChan.Consume("ml_results_queue", "core_worker", false, false, false, false, nil)
@@ -151,6 +157,13 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected.HandleFunc("/ai/image-generation", ad.ImageGeneration).Methods(http.MethodPost)
 	protected.HandleFunc("/ai/logic-check", ad.LogicCheck).Methods(http.MethodPost)
 	protected.HandleFunc("/ai/jobs/{jobId:"+uuidRe+"}", ad.GetJob).Methods(http.MethodGet)
+
+	protected.HandleFunc("/credits/balance", credd.GetBalance).Methods(http.MethodGet)
+	protected.HandleFunc("/credits/transactions", credd.GetTransactions).Methods(http.MethodGet)
+	protected.HandleFunc("/credits/packages", credd.GetPackages).Methods(http.MethodGet)
+	protected.HandleFunc("/credits/purchase", credd.InitiatePurchase).Methods(http.MethodPost)
+
+	api.HandleFunc("/webhooks/yoomoney", credd.HandleIPN).Methods(http.MethodPost)
 
 	protected.HandleFunc("/profile", authd.UpdateProfile).Methods(http.MethodPatch)
 	protected.HandleFunc("/profile/avatar", authd.UploadAvatar).Methods(http.MethodPost)

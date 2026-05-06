@@ -21,15 +21,20 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+type CreditsDeductor interface {
+	DeductCredits(ctx context.Context, userID uint64, amount int, jobType string) error
+}
+
 type Usecase struct {
 	jobs     *repository.Repository
 	chapters *chapterrepo.Repository
 	stories  *storyrepo.Repository
 	rmqChan  *amqp.Channel
+	credits  CreditsDeductor
 }
 
-func New(jobs *repository.Repository, chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel) *Usecase {
-	return &Usecase{jobs: jobs, chapters: chapters, stories: stories, rmqChan: rmqChan}
+func New(jobs *repository.Repository, chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel, credits CreditsDeductor) *Usecase {
+	return &Usecase{jobs: jobs, chapters: chapters, stories: stories, rmqChan: rmqChan, credits: credits}
 }
 
 func sha256Hex(data string) string {
@@ -48,7 +53,7 @@ type imageGenInput struct {
 	Prompt    string `json:"prompt"`
 }
 
-func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, content string) (uuid.UUID, error) {
+func (u *Usecase) StartSpellcheck(ctx context.Context, userID uint64, chapterID uuid.UUID, content string) (uuid.UUID, error) {
 	ch, err := u.chapters.GetByID(ctx, chapterID)
 	if err != nil {
 		return uuid.Nil, err
@@ -62,6 +67,10 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, cont
 
 	if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeSpellcheck, contentHash); err == nil {
 		return cachedJob.ID, nil
+	}
+
+	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostSpellcheck, constants.AIJobTypeSpellcheck); err != nil {
+		return uuid.Nil, err
 	}
 
 	tags, err := u.stories.TagsForStory(ctx, ch.StoryID)
@@ -111,7 +120,7 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, chapterID uuid.UUID, cont
 	return jobID, nil
 }
 
-func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID, content, prompt string) (uuid.UUID, error) {
+func (u *Usecase) StartImageGeneration(ctx context.Context, userID uint64, chapterID uuid.UUID, content, prompt string) (uuid.UUID, error) {
 	ch, err := u.chapters.GetByID(ctx, chapterID)
 	if err != nil {
 		return uuid.Nil, err
@@ -125,6 +134,10 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID,
 
 	if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeImageGeneration, contentHash); err == nil {
 		return cachedJob.ID, nil
+	}
+
+	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostImageGen, constants.AIJobTypeImageGeneration); err != nil {
+		return uuid.Nil, err
 	}
 
 	payloadBytes, _ := json.Marshal(imageGenInput{
@@ -164,7 +177,7 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, chapterID uuid.UUID,
 	return jobID, nil
 }
 
-func (u *Usecase) StartLogicCheck(ctx context.Context, chapterID uuid.UUID, content string) (uuid.UUID, error) {
+func (u *Usecase) StartLogicCheck(ctx context.Context, userID uint64, chapterID uuid.UUID, content string) (uuid.UUID, error) {
 	ch, err := u.chapters.GetByID(ctx, chapterID)
 	if err != nil {
 		return uuid.Nil, err
@@ -178,6 +191,10 @@ func (u *Usecase) StartLogicCheck(ctx context.Context, chapterID uuid.UUID, cont
 
 	if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeLogicCheck, contentHash); err == nil {
 		return cachedJob.ID, nil
+	}
+
+	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostLogicCheck, constants.AIJobTypeLogicCheck); err != nil {
+		return uuid.Nil, err
 	}
 
 	briefs, _ := u.chapters.ListBriefByStory(ctx, ch.StoryID)
@@ -332,7 +349,7 @@ func (u *Usecase) GetJobView(ctx context.Context, jobID uuid.UUID) (map[string]a
 	return out, nil
 }
 
-func (u *Usecase) StartCanonCheck(ctx context.Context, chapterID uuid.UUID) (uuid.UUID, error) {
+func (u *Usecase) StartCanonCheck(ctx context.Context, userID uint64, chapterID uuid.UUID) (uuid.UUID, error) {
 	ch, err := u.chapters.GetByID(ctx, chapterID)
 	if err != nil {
 		return uuid.Nil, err
@@ -357,6 +374,10 @@ func (u *Usecase) StartCanonCheck(ctx context.Context, chapterID uuid.UUID) (uui
 
 	if fandomSlug == "" {
 		return uuid.Nil, errors.New("story is original or has no fandom tag, canon check is not applicable")
+	}
+
+	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostCanonCheck, "canon_check"); err != nil {
+		return uuid.Nil, err
 	}
 
 	jobID := uuid.New()

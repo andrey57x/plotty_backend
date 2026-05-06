@@ -34,6 +34,10 @@ type Config struct {
 	MinioUser      string `mapstructure:"MINIO_ROOT_USER"`
 	MinioPassword  string `mapstructure:"MINIO_ROOT_PASSWORD"`
 	MinioBucket    string `mapstructure:"MINIO_BUCKET_NAME"`
+
+	YooMoneyWallet  string `mapstructure:"YOOMONEY_WALLET"`
+	YooMoneySecret  string `mapstructure:"YOOMONEY_SECRET"`
+	FrontendURL     string `mapstructure:"FRONTEND_URL"`
 }
 
 func Load() (*Config, error) {
