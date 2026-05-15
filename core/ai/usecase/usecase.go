@@ -132,9 +132,9 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, userID uint64, chapt
 
 	contentHash := sha256Hex(content + "|" + prompt)
 
-	if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeImageGeneration, contentHash); err == nil {
-		return cachedJob.ID, nil
-	}
+	// if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeImageGeneration, contentHash); err == nil {
+	// 	return cachedJob.ID, nil
+	// }
 
 	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostImageGen, constants.AIJobTypeImageGeneration); err != nil {
 		return uuid.Nil, err

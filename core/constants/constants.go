@@ -12,6 +12,11 @@ const (
 )
 
 const (
+	// Порог слов в запросе, после которого включается семантический поиск
+	SemanticSearchMinWords = 6
+)
+
+const (
 	TagCategoryDirectionality = "directionality"
 	TagCategoryGenre          = "genre"
 	TagCategoryWarning        = "warning"

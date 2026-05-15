@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
+	"github.com/fivecode/plotty/core/constants"
 	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/middleware"
 	"github.com/fivecode/plotty/core/ml"
@@ -62,7 +63,7 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 	var err error
 
 	words := strings.Fields(q)
-	isSemantic := len(words) > 2
+	isSemantic := len(words) >= constants.SemanticSearchMinWords
 
 	if isSemantic {
 		semanticIDs, mlErr := u.mlClient.SearchSemantic(ctx, q)
