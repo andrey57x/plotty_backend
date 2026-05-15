@@ -69,10 +69,6 @@ func (u *Usecase) StartSpellcheck(ctx context.Context, userID uint64, chapterID 
 		return cachedJob.ID, nil
 	}
 
-	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostSpellcheck, constants.AIJobTypeSpellcheck); err != nil {
-		return uuid.Nil, err
-	}
-
 	tags, err := u.stories.TagsForStory(ctx, ch.StoryID)
 	var fandomSlug string
 	if err == nil {

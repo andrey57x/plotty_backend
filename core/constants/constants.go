@@ -29,7 +29,6 @@ const (
 	CreditCostImageGen   = 3
 	CreditCostLogicCheck = 2
 	CreditCostCanonCheck = 2
-	CreditCostSpellcheck = 1
 	CreditInitialBalance = 50
 )
 
