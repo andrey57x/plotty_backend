@@ -178,6 +178,11 @@ func (u *Usecase) StartLogicCheck(ctx context.Context, userID uint64, chapterID 
 	if err != nil {
 		return uuid.Nil, err
 	}
+
+	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostLogicCheck, constants.AIJobTypeLogicCheck); err != nil {
+		return uuid.Nil, err
+	}
+
 	text := strings.TrimSpace(content)
 	if text == "" {
 		return uuid.Nil, named_errors.ErrInvalidInput
@@ -187,10 +192,6 @@ func (u *Usecase) StartLogicCheck(ctx context.Context, userID uint64, chapterID 
 
 	if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeLogicCheck, contentHash); err == nil {
 		return cachedJob.ID, nil
-	}
-
-	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostLogicCheck, constants.AIJobTypeLogicCheck); err != nil {
-		return uuid.Nil, err
 	}
 
 	briefs, _ := u.chapters.ListBriefByStory(ctx, ch.StoryID)
@@ -351,6 +352,10 @@ func (u *Usecase) StartCanonCheck(ctx context.Context, userID uint64, chapterID 
 		return uuid.Nil, err
 	}
 
+	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostCanonCheck, "canon_check"); err != nil {
+		return uuid.Nil, err
+	}
+
 	tags, err := u.stories.TagsForStory(ctx, ch.StoryID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to get tags: %w", err)
@@ -370,10 +375,6 @@ func (u *Usecase) StartCanonCheck(ctx context.Context, userID uint64, chapterID 
 
 	if fandomSlug == "" {
 		return uuid.Nil, errors.New("story is original or has no fandom tag, canon check is not applicable")
-	}
-
-	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostCanonCheck, "canon_check"); err != nil {
-		return uuid.Nil, err
 	}
 
 	jobID := uuid.New()
