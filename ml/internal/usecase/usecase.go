@@ -257,13 +257,40 @@ func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTas
 	return u.publishResult(ctx, task, "completed", json.RawMessage(cleanJSONStr), "")
 }
 
+func chunkText(text string, maxLen int) []string {
+	paragraphs := strings.Split(text, "\n")
+	var chunks []string
+	var current string
+
+	for _, p := range paragraphs {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if len(current)+len(p) > maxLen && len(current) > 0 {
+			chunks = append(chunks, current)
+			current = p
+		} else {
+			if current == "" {
+				current = p
+			} else {
+				current += "\n" + p
+			}
+		}
+	}
+	if current != "" {
+		chunks = append(chunks, current)
+	}
+	return chunks
+}
+
 const canonSystemPrompt = `Ты — строгий критик вселенной "%s".
 ОТВЕЧАЙ СТРОГО ПО ДЕЛУ. БЕЗ МАРКДАУН ФОРМАТИРОВАНИЯ. ТОЛЬКО ОБЫЧНЫЙ ТЕКСТ.
 Основывайся ТОЛЬКО на предоставленных фактах из канона.
 Если фактов недостаточно для вывода, не выдумывай детали, а укажи только на явные несоответствия с текстом.
 Твоя задача: найти противоречия между событиями главы и официальным каноном.
 
-ФАКТЫ ИЗ КАНОНА, которые математически близки к тексту главы:
+ФАКТЫ ИЗ КАНОНА, которые были найдены для разных сцен главы:
 %s
 
 ТЕКСТ ГЛАВЫ:
@@ -279,35 +306,44 @@ func (u *AIUsecase) processCanonCheck(ctx context.Context, task sharedrmq.MLTask
 
 	_ = u.repo.CreateTask(ctx, taskID, "canon_check", "fandom: "+fandomSlug)
 
-	// 1. Делаем вектор из текста главы (можно резать на чанки, но для начала возьмем весь текст)
-	// Если текст длинный (10к символов), лучше вырезать первые 2000 символов для эмбеддинга,
-	// либо сделать суммаризацию, но начнем с простого:
-	textForEmbedding := task.Payload
-	if len(textForEmbedding) > 2000 {
-		textForEmbedding = textForEmbedding[:2000]
-	}
-	vector, err := u.embeddings.GetEmbedding(ctx, textForEmbedding)
-	if err != nil {
-		return u.publishResult(ctx, task, "failed", nil, "embeddings error: "+err.Error())
+	// 1. Бьем текст главы на чанки
+	chunks := chunkText(task.Payload, 1000)
+
+	// Используем map для удаления дубликатов фактов
+	factSet := make(map[string]struct{})
+	var uniqueFacts []string
+
+	// 2. Ищем факты для КАЖДОГО чанка
+	for _, chunk := range chunks {
+		vector, err := u.embeddings.GetEmbedding(ctx, chunk)
+		if err != nil {
+			continue // Если один чанк не сработал, идем дальше
+		}
+
+		// Берем топ-2 факта для каждого абзаца
+		facts, err := u.repo.SearchCanonFacts(ctx, fandomSlug, vector, 2)
+		if err != nil {
+			continue
+		}
+
+		for _, f := range facts {
+			if _, exists := factSet[f]; !exists {
+				factSet[f] = struct{}{}
+				uniqueFacts = append(uniqueFacts, f)
+			}
+		}
 	}
 
-	// 2. Ищем релевантные факты (Топ-7 фактов)
-	facts, err := u.repo.SearchCanonFacts(ctx, fandomSlug, vector, 7)
-	if err != nil {
-		return u.publishResult(ctx, task, "failed", nil, "db search error: "+err.Error())
-	}
-
-	// Если канона по фандому в БД нет
-	if len(facts) == 0 {
+	if len(uniqueFacts) == 0 {
 		return u.publishResult(ctx, task, "completed", map[string]string{
-			"message": "База знаний для этого фандома пока пуста.",
+			"message": "База знаний для этого фандома пока пуста или не удалось найти подходящие факты.",
 		}, "")
 	}
 
-	factsStr := strings.Join(facts, "\n- ")
+	factsStr := strings.Join(uniqueFacts, "\n- ")
 	userPrompt := fmt.Sprintf(canonSystemPrompt, fandomSlug, "- "+factsStr, task.Payload, warnings)
 
-	// 3. Отправляем в LLM
+	// 3. Отправляем всё это богатство в LLM
 	llmResponse, err := u.llm.SendChat("Ты строгий критик. Отвечай только на русском языке.", userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())

@@ -57,13 +57,20 @@ func WriteValidationErrors(w http.ResponseWriter, code int, errs []FieldError) {
 
 func WriteValidationError(w http.ResponseWriter, code int, err error) {
 	if ge, ok := err.(govalidator.Errors); ok {
-		out := make([]FieldError, 0, len(ge))
+		out := make([]FieldError, 0, len(ge.Errors()))
 		for _, e := range ge.Errors() {
-			field, msg := parseGovalidatorError(e.Error())
-			out = append(out, FieldError{
-				Field:   field,
-				Message: msg,
-			})
+			if validatorErr, ok := e.(govalidator.Error); ok {
+				out = append(out, FieldError{
+					Field:   validatorErr.Name,
+					Message: validatorErr.Err.Error(),
+				})
+			} else {
+				field, msg := parseGovalidatorError(e.Error())
+				out = append(out, FieldError{
+					Field:   field,
+					Message: msg,
+				})
+			}
 		}
 		WriteValidationErrors(w, code, out)
 		return

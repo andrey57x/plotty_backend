@@ -246,7 +246,7 @@ func (r *Repository) ListIDs(ctx context.Context, q string, tagSlugs []string, l
 	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
 		SELECT s.id
 		FROM stories s
-		WHERE ($1 = '' OR s.title ILIKE '%%' || $1 || '%%')
+		WHERE ($1 = '' OR to_tsvector('russian', s.title) @@ websearch_to_tsquery('russian', $1))
 		AND s.status = 'published'
 		%s
 		ORDER BY s.updated_at DESC
@@ -299,7 +299,7 @@ func (r *Repository) CountList(ctx context.Context, q string, tagSlugs []string)
 	err = r.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT COUNT(*)::int
 		FROM stories s
-		WHERE ($1 = '' OR s.title ILIKE '%%' || $1 || '%%')
+		WHERE ($1 = '' OR to_tsvector('russian', s.title) @@ websearch_to_tsquery('russian', $1))
 		AND s.status = 'published'
 		%s
 	`, whereTags), args...).Scan(&total)
@@ -341,7 +341,7 @@ func (r *Repository) ListMyIDs(ctx context.Context, userID uint64, q string, tag
 		SELECT s.id
 		FROM stories s
 		WHERE s.author_id = $1
-		AND ($2 = '' OR s.title ILIKE '%%' || $2 || '%%')
+		AND ($2 = '' OR to_tsvector('russian', s.title) @@ websearch_to_tsquery('russian', $2))
 		%s
 		ORDER BY s.updated_at DESC
 		LIMIT $3 OFFSET $4
@@ -395,7 +395,7 @@ func (r *Repository) CountMyList(ctx context.Context, userID uint64, q string, t
 		SELECT COUNT(*)::int
 		FROM stories s
 		WHERE s.author_id = $1
-		AND ($2 = '' OR s.title ILIKE '%%' || $2 || '%%')
+		AND ($2 = '' OR to_tsvector('russian', s.title) @@ websearch_to_tsquery('russian', $2))
 		%s
 	`, whereTags), args...).Scan(&total)
 	if err != nil {
@@ -437,7 +437,7 @@ func (r *Repository) ListPublishedIDsByAuthor(ctx context.Context, authorID uint
 		FROM stories s
 		WHERE s.author_id = $1
 		AND s.status = 'published'
-		AND ($2 = '' OR s.title ILIKE '%%' || $2 || '%%')
+		AND ($2 = '' OR to_tsvector('russian', s.title) @@ websearch_to_tsquery('russian', $2))
 		%s
 		ORDER BY s.updated_at DESC
 		LIMIT $3 OFFSET $4
@@ -490,7 +490,7 @@ func (r *Repository) CountPublishedByAuthor(ctx context.Context, authorID uint64
 		FROM stories s
 		WHERE s.author_id = $1
 		AND s.status = 'published'
-		AND ($2 = '' OR s.title ILIKE '%%' || $2 || '%%')
+		AND ($2 = '' OR to_tsvector('russian', s.title) @@ websearch_to_tsquery('russian', $2))
 		%s
 	`, whereTags), args...).Scan(&total)
 	if err != nil {

@@ -46,14 +46,14 @@ func New(uc AuthUsecase, sessionDuration time.Duration, st AvatarStorage) *AuthD
 }
 
 type loginRequest struct {
-	Email    string `json:"email" valid:"required,email"`
-	Password string `json:"password" valid:"required,password"`
+	Email    string `json:"email" valid:"required~email_required,email~email_invalid"`
+	Password string `json:"password" valid:"required~password_required,password~password_too_short"`
 }
 
 type registerRequest struct {
-	Email           string `json:"email" valid:"required,email"`
-	Password        string `json:"password" valid:"required,password"`
-	ConfirmPassword string `json:"confirm_password" valid:"required,password"`
+	Email           string `json:"email" valid:"required~email_required,email~email_invalid"`
+	Password        string `json:"password" valid:"required~password_required,password~password_too_short"`
+	ConfirmPassword string `json:"confirm_password" valid:"required~password_required,password~password_too_short"`
 }
 
 func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {

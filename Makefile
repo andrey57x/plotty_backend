@@ -4,6 +4,9 @@
 up:
 	docker compose --env-file .env -f deploy/docker-compose.yml up -d
 
+stop:
+	docker compose -f deploy/docker-compose.yml stop
+
 # Сборка и запуск (использовать, если поменял код на Go)
 build:
 	docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
