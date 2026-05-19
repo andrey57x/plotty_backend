@@ -67,6 +67,7 @@ services:
 
   embeddings:
     image: ghcr.io/andrey57x/plotty-embeddings:latest
+    env_file: .env
     networks:
       - plotty_net
     restart: always
