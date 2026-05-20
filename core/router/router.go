@@ -13,9 +13,6 @@ import (
 	authdeliv "github.com/fivecode/plotty/core/auth/delivery"
 	authrepo "github.com/fivecode/plotty/core/auth/repository"
 	authuc "github.com/fivecode/plotty/core/auth/usecase"
-	creddeliv "github.com/fivecode/plotty/core/credits/delivery"
-	credrepo "github.com/fivecode/plotty/core/credits/repository"
-	creduc "github.com/fivecode/plotty/core/credits/usecase"
 	chdeliv "github.com/fivecode/plotty/core/chapter/delivery"
 	chrepo "github.com/fivecode/plotty/core/chapter/repository"
 	chuc "github.com/fivecode/plotty/core/chapter/usecase"
@@ -23,6 +20,12 @@ import (
 	commentrepo "github.com/fivecode/plotty/core/comment/repository"
 	commentuc "github.com/fivecode/plotty/core/comment/usecase"
 	"github.com/fivecode/plotty/core/config"
+	creddeliv "github.com/fivecode/plotty/core/credits/delivery"
+	credrepo "github.com/fivecode/plotty/core/credits/repository"
+	creduc "github.com/fivecode/plotty/core/credits/usecase"
+	fandomdeliv "github.com/fivecode/plotty/core/fandom/delivery"
+	fandomrepo "github.com/fivecode/plotty/core/fandom/repository"
+	fandomuc "github.com/fivecode/plotty/core/fandom/usecase"
 	libdeliv "github.com/fivecode/plotty/core/library/delivery"
 	librepo "github.com/fivecode/plotty/core/library/repository"
 	libuc "github.com/fivecode/plotty/core/library/usecase"
@@ -50,6 +53,7 @@ const uuidRe = `[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9
 
 func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, rmqChan *amqp.Channel) http.Handler {
 	tr := tagrepo.New(pool)
+	fandomr := fandomrepo.New(pool)
 	sr := storyrepo.New(pool)
 	cr := chrepo.New(pool)
 	ar := airepo.New(pool)
@@ -59,6 +63,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	credr := credrepo.New(pool)
 
 	tu := taguc.New(tr)
+	fandomu := fandomuc.New(fandomr, tr, authr, rmqChan)
 	mlClient := ml.NewClient(cfg.MLBaseURL)
 
 	su := storyuc.New(sr, tr, cr, mlClient)
@@ -86,6 +91,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	sd := storydeliv.New(su)
 	cd := chdeliv.New(cu)
 	td := tagdeliv.New(tu)
+	fandomd := fandomdeliv.New(fandomu)
 	ad := aideliv.New(au)
 	authd := authdeliv.New(authu, sessionDuration, st)
 	ld := likedeliv.New(lu)
@@ -190,6 +196,12 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	api.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.List).Methods(http.MethodGet)
 
 	api.HandleFunc("/tags", td.List).Methods(http.MethodGet)
+
+	protected.HandleFunc("/fandoms/suggest", fandomd.Suggest).Methods(http.MethodPost)
+
+	protected.HandleFunc("/admin/fandoms/pending", fandomd.ListPending).Methods(http.MethodGet)
+	protected.HandleFunc("/admin/fandoms/{id:"+uuidRe+"}/approve", fandomd.Approve).Methods(http.MethodPost)
+	protected.HandleFunc("/admin/fandoms/{id:"+uuidRe+"}/reject", fandomd.Reject).Methods(http.MethodPost)
 
 	return middleware.CORS(r)
 }

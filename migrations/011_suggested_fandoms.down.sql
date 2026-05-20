@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS suggested_fandoms;
+ALTER TABLE users DROP COLUMN IF EXISTS is_admin;

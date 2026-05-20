@@ -64,7 +64,7 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 	log := logger.FromContext(ctx)
 	log.Info().Str("email", email).Msg("getting user by email from PostgreSQL")
 
-	query := `SELECT id, email, password_hash, username, avatar_url, bio, ai_credits, created_at, updated_at FROM users WHERE email = $1`
+	query := `SELECT id, email, password_hash, username, avatar_url, bio, ai_credits, is_admin, created_at, updated_at FROM users WHERE email = $1`
 
 	user := &models.User{}
 	var avatarURL, bio sql.NullString
@@ -78,6 +78,7 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 		&avatarURL,
 		&bio,
 		&user.Credits,
+		&user.IsAdmin,
 		&user.CreatedAt,
 		&updatedAt,
 	)
@@ -113,7 +114,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 	query := `
 		INSERT INTO users (email, password_hash, username)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, password_hash, username, avatar_url, bio, ai_credits, created_at, updated_at
+		RETURNING id, email, password_hash, username, avatar_url, bio, ai_credits, is_admin, created_at, updated_at
 	`
 
 	user := &models.User{}
@@ -128,6 +129,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 		&avatarURL,
 		&bio,
 		&user.Credits,
+		&user.IsAdmin,
 		&user.CreatedAt,
 		&updatedAt,
 	)
@@ -205,7 +207,7 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Msg("getting user by id from PostgreSQL")
 
-	query := `SELECT id, email, password_hash, username, avatar_url, bio, ai_credits, created_at, updated_at FROM users WHERE id = $1`
+	query := `SELECT id, email, password_hash, username, avatar_url, bio, ai_credits, is_admin, created_at, updated_at FROM users WHERE id = $1`
 
 	user := &models.User{}
 	var avatarURL, bio sql.NullString
@@ -219,10 +221,10 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 		&avatarURL,
 		&bio,
 		&user.Credits,
+		&user.IsAdmin,
 		&user.CreatedAt,
 		&updatedAt,
 	)
-
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			log.Warn().Uint64("user_id", userID).Msg("user not found by id")

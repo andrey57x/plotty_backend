@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fivecode/plotty/ml/internal/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,6 +36,7 @@ type MLRepository interface {
 	GetSimilarStories(ctx context.Context, storyID uuid.UUID, limit int) ([]uuid.UUID, error)
 
 	SearchStoriesByEmbedding(ctx context.Context, embedding []float32, limit int) ([]uuid.UUID, error)
+	InsertCanonFact(ctx context.Context, fact models.CanonFact) error
 }
 
 type postgresRepo struct {
@@ -362,4 +364,14 @@ func (r *postgresRepo) SearchStoriesByEmbedding(ctx context.Context, embedding [
 		}
 	}
 	return ids, nil
+}
+
+func (r *postgresRepo) InsertCanonFact(ctx context.Context, fact models.CanonFact) error {
+	query := `
+		INSERT INTO canon_lorebooks (id, fandom_slug, entity_name, fact_text, embedding)
+		VALUES ($1, $2, $3, $4, $5::vector)
+	`
+	vecStr := vecToString(fact.Embedding)
+	_, err := r.db.Exec(ctx, query, fact.ID, fact.FandomSlug, fact.EntityName, fact.FactText, vecStr)
+	return err
 }

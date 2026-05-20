@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/fivecode/plotty/internal/infrastructure/gigachat"
 	sharedrmq "github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/fivecode/plotty/ml/internal/models"
 	"github.com/fivecode/plotty/ml/internal/repository"
@@ -22,7 +23,7 @@ type Spellchecker interface {
 }
 
 type LLMProvider interface {
-	SendChat(systemPrompt, userText string) (string, error)
+	SendChat(modelName, systemPrompt, userText string) (string, error)
 	GenerateImage(prompt string) (string, error)
 	DownloadFile(fileID string) ([]byte, error)
 }
@@ -149,12 +150,14 @@ func (u *AIUsecase) ProcessMLTask(ctx context.Context, task sharedrmq.MLTaskMess
 		return nil
 	case "canon_check":
 		return u.processCanonCheck(ctx, task)
+	case "generate_fandom_lore":
+		return u.processGenerateFandomLore(ctx, task)
 	default:
 		return fmt.Errorf("unknown ml task type: %s", task.Type)
 	}
 }
 
-const imagePromptEnhancer = `На основе текста главы и пожелания пользователя, составь детальный промпт для нейросети-художника. Опиши композицию, стиль, освещение, цвета. Ответь ТОЛЬКО текстом промпта, без вводных слов. Ограничься 200 символами.`
+const imagePromptEnhancer = `На основе текста главы и пожелания пользователя, составь детальный промпт для нейросети-художника. Основой выступает текст главы, а пожелания пользователя уточняют. Опиши композицию, стиль, освещение, цвета. Ответь ТОЛЬКО текстом промпта, без вводных слов. Ограничься 200 символами.`
 
 func (u *AIUsecase) processImageGen(ctx context.Context, task sharedrmq.MLTaskMessage) error {
 	taskID, _ := uuid.Parse(task.TaskID)
@@ -169,7 +172,7 @@ func (u *AIUsecase) processImageGen(ctx context.Context, task sharedrmq.MLTaskMe
 	_ = json.Unmarshal([]byte(task.Payload), &input)
 
 	promptInput := fmt.Sprintf("Текст: %s\nПожелание: %s", input.Content, input.Prompt)
-	enhancedPrompt, err := u.llm.SendChat(imagePromptEnhancer, promptInput)
+	enhancedPrompt, err := u.llm.SendChat(gigachat.ModelGigaChat, imagePromptEnhancer, promptInput)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, err.Error())
 	}
@@ -240,7 +243,7 @@ func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTas
 
 	userPrompt := fmt.Sprintf("ЛОР ДО ЭТОЙ ГЛАВЫ:\n%s\n\nТЕКСТ НОВОЙ ГЛАВЫ:\n%s", prevLore, task.Payload)
 
-	llmResponse, err := u.llm.SendChat(iterativeLoreSystemPrompt, userPrompt)
+	llmResponse, err := u.llm.SendChat(gigachat.ModelGigaChat, iterativeLoreSystemPrompt, userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
@@ -344,7 +347,7 @@ func (u *AIUsecase) processCanonCheck(ctx context.Context, task sharedrmq.MLTask
 	userPrompt := fmt.Sprintf(canonSystemPrompt, fandomSlug, "- "+factsStr, task.Payload, warnings)
 
 	// 3. Отправляем всё это богатство в LLM
-	llmResponse, err := u.llm.SendChat("Ты строгий критик. Отвечай только на русском языке.", userPrompt)
+	llmResponse, err := u.llm.SendChat(gigachat.ModelGigaChat, "Ты строгий критик. Отвечай только на русском языке.", userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
@@ -368,7 +371,7 @@ func (u *AIUsecase) processGenerateSummary(ctx context.Context, task sharedrmq.M
 
 	_ = u.repo.CreateTask(ctx, taskID, "generate_summary", "story_id: "+storyID.String())
 
-	summary, err := u.llm.SendChat(summarySystemPrompt, "Текст первой главы:\n"+task.Payload)
+	summary, err := u.llm.SendChat(gigachat.ModelGigaChat, summarySystemPrompt, "Текст первой главы:\n"+task.Payload)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
@@ -428,7 +431,7 @@ func (u *AIUsecase) processLogicCheck(ctx context.Context, task sharedrmq.MLTask
 
 	userPrompt := fmt.Sprintf(logicSystemPrompt, currentLore, task.Payload)
 
-	llmResponse, err := u.llm.SendChat("Ты — строгий бета-ридер. Отвечай только на русском языке, без форматирования и эмодзи.", userPrompt)
+	llmResponse, err := u.llm.SendChat(gigachat.ModelGigaChat, "Ты — строгий бета-ридер. Отвечай только на русском языке, без форматирования и эмодзи.", userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
@@ -439,4 +442,70 @@ func (u *AIUsecase) processLogicCheck(ctx context.Context, task sharedrmq.MLTask
 	return u.publishResult(ctx, task, "completed", map[string]string{
 		"message": strings.TrimSpace(cleanResponse),
 	}, "")
+}
+
+const fandomLoreSystemPrompt = `Ты — эксперт-архивариус вымышленных миров. Твоя задача: на основе пользовательского описания вселенной создать структурированную базу знаний (ЛОР).
+Выдели до 30 ключевых фактов: персонажи, законы физики/магии, артефакты, локации.
+ОТВЕЧАЙ СТРОГО В ФОРМАТЕ JSON-МАССИВА, БЕЗ МАРКДАУН РАЗМЕТКИ (слова без json), БЕЗ ВВОДНЫХ И СЛЕДУЮЩИХ СЛОВ.
+Формат ответа:
+[
+  {"entity": "Имя или Название", "fact": "Подробное описание факта или правила"}
+]`
+
+func (u *AIUsecase) processGenerateFandomLore(ctx context.Context, task sharedrmq.MLTaskMessage) error {
+	taskID, _ := uuid.Parse(task.TaskID)
+	fandomSlug := task.Metadata["fandom_slug"]
+
+	_ = u.repo.CreateTask(ctx, taskID, "generate_fandom_lore", "fandom_slug: "+fandomSlug)
+
+	// 1. Просим GigaChat-Pro сгенерировать JSON массив фактов
+	llmResponse, err := u.llm.SendChat(gigachat.ModelGigaChatPro, fandomLoreSystemPrompt, "Описание вселенной:\n"+task.Payload)
+	if err != nil {
+		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
+	}
+
+	// 2. Очищаем ответ от возможного мусора (маркдауна)
+	cleanJSONStr := cleanJSON(llmResponse)
+	
+	var rawFacts []map[string]string
+	if err := json.Unmarshal([]byte(cleanJSONStr), &rawFacts); err != nil {
+		return u.publishResult(ctx, task, "failed", nil, "invalid json from llm: "+err.Error())
+	}
+
+	// 3. Проходим по каждому факту, генерируем вектор и сохраняем
+	inserted := 0
+	for _, item := range rawFacts {
+		entity := item["entity"]
+		fact := item["fact"]
+
+		if entity == "" || fact == "" {
+			continue
+		}
+
+		// Делаем эмбеддинг факта
+		vector, err := u.embeddings.GetEmbedding(ctx, fact)
+		if err != nil {
+			continue // если один упал, пропускаем, идем дальше
+		}
+
+		canonFact := models.CanonFact{
+			ID:         uuid.New(),
+			FandomSlug: fandomSlug,
+			EntityName: entity,
+			FactText:   fact,
+			Embedding:  vector,
+		}
+
+		// Сохраняем в БД
+		if err := u.repo.InsertCanonFact(ctx, canonFact); err == nil {
+			inserted++
+		}
+	}
+
+	resultMsg := map[string]any{
+		"message":        "Фэндом успешно обработан",
+		"facts_inserted": inserted,
+	}
+
+	return u.publishResult(ctx, task, "completed", resultMsg, "")
 }

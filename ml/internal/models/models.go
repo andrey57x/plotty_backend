@@ -31,3 +31,11 @@ type AITask struct {
 	Result    json.RawMessage
 	UpdatedAt time.Time
 }
+
+type CanonFact struct {
+	ID         uuid.UUID
+	FandomSlug string
+	EntityName string
+	FactText   string
+	Embedding  []float32
+}

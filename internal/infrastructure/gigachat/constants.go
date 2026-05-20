@@ -7,3 +7,8 @@ const (
 	fileURL               = "https://gigachat.devices.sberbank.ru/api/v1/files/%s/content"
 	completionTemperature = 0.1
 )
+
+const (
+	ModelGigaChat    = "GigaChat"
+	ModelGigaChatPro = "GigaChat-Pro"
+)

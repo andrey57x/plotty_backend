@@ -106,9 +106,20 @@ type User struct {
 	AvatarURL *string    `json:"avatarUrl,omitempty"`
 	Bio       *string    `json:"bio,omitempty"`
 	Credits   int        `json:"credits"`
+	IsAdmin   bool       `json:"isAdmin"`
 	Password  string     `json:"-"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+type SuggestedFandom struct {
+	ID          uuid.UUID `json:"id"`
+	UserID      uint64    `json:"userId"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 type PublicUserProfile struct {

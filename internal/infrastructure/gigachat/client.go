@@ -83,14 +83,14 @@ func (c *Client) ensureToken() error {
 	return nil
 }
 
-// SendChat отправляет текстовый запрос
-func (c *Client) SendChat(systemPrompt, userText string) (string, error) {
+// SendChat отправляет текстовый запрос с указанием конкретной модели
+func (c *Client) SendChat(modelName, systemPrompt, userText string) (string, error) {
 	if err := c.ensureToken(); err != nil {
 		return "", err
 	}
 
 	reqBody := ChatRequest{
-		Model: "GigaChat",
+		Model: modelName,
 		Messages: []Message{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userText},

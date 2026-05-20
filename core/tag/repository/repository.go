@@ -86,3 +86,26 @@ func (r *Repository) ValidateAllExist(ctx context.Context, ids []uuid.UUID) erro
 	}
 	return nil
 }
+
+func (r *Repository) Create(ctx context.Context, t models.Tag) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO tags (id, category, slug, name) VALUES ($1, $2, $3, $4)
+	`, t.ID, t.Category, t.Slug, t.Name)
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Str("slug", t.Slug).Msg("tag_repo: create failed")
+		return fmt.Errorf("tag_repo.Create: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) ExistsByName(ctx context.Context, name string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM tags WHERE LOWER(name) = LOWER($1))
+	`, name).Scan(&exists)
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Str("name", name).Msg("tag_repo: ExistsByName failed")
+		return false, fmt.Errorf("tag_repo.ExistsByName: %w", err)
+	}
+	return exists, nil
+}
