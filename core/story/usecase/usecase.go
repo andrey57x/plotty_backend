@@ -119,6 +119,7 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 		log.Error().Err(err).Msg("story_uc: AuthorsForStories failed")
 		return nil, 0, fmt.Errorf("story_uc.List authors: %w", err)
 	}
+	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
 
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
@@ -126,13 +127,17 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 		if !ok {
 			continue
 		}
-		items = append(items, models.StoryListItem{
+		item := models.StoryListItem{
 			Story:         s,
 			Tags:          tagsMap[id],
 			ChaptersCount: counts[id],
 			LikesCount:    likes[id],
 			Author:        authors[id],
-		})
+		}
+		if url := covers[id]; url != "" {
+			item.CoverURL = &url
+		}
+		items = append(items, item)
 	}
 
 	log.Info().Int("total", total).Int("returned", len(items)).Bool("semantic", isSemantic).Msg("story_uc: list ok")
@@ -198,6 +203,7 @@ func (u *Usecase) ListMy(ctx context.Context, q string, tagSlugs []string, page,
 		log.Error().Err(err).Msg("story_uc: AuthorsForStories failed")
 		return nil, 0, fmt.Errorf("story_uc.ListMy authors: %w", err)
 	}
+	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
 
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
@@ -205,13 +211,17 @@ func (u *Usecase) ListMy(ctx context.Context, q string, tagSlugs []string, page,
 		if !ok {
 			continue
 		}
-		items = append(items, models.StoryListItem{
+		item := models.StoryListItem{
 			Story:         s,
 			Tags:          tagsMap[id],
 			ChaptersCount: counts[id],
 			LikesCount:    likes[id],
 			Author:        authors[id],
-		})
+		}
+		if url := covers[id]; url != "" {
+			item.CoverURL = &url
+		}
+		items = append(items, item)
 	}
 
 	log.Info().Uint64("user_id", userID).Int("total", total).Int("returned", len(items)).Msg("story_uc: list_my ok")
@@ -266,6 +276,7 @@ func (u *Usecase) ListPublishedByAuthor(ctx context.Context, authorID uint64, q 
 	if err != nil {
 		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor authors: %w", err)
 	}
+	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
 
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
@@ -273,13 +284,17 @@ func (u *Usecase) ListPublishedByAuthor(ctx context.Context, authorID uint64, q 
 		if !ok {
 			continue
 		}
-		items = append(items, models.StoryListItem{
+		item := models.StoryListItem{
 			Story:         s,
 			Tags:          tagsMap[id],
 			ChaptersCount: counts[id],
 			LikesCount:    likes[id],
 			Author:        authors[id],
-		})
+		}
+		if url := covers[id]; url != "" {
+			item.CoverURL = &url
+		}
+		items = append(items, item)
 	}
 	return items, total, nil
 }
@@ -494,6 +509,7 @@ func (u *Usecase) GetSimilar(ctx context.Context, storyID uuid.UUID) ([]models.S
 	counts, _ := u.stories.ChapterCountsPublished(ctx, ids)
 	likes, _ := u.stories.LikeCounts(ctx, ids)
 	authors, _ := u.stories.AuthorsForStories(ctx, ids)
+	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
 
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
@@ -501,13 +517,17 @@ func (u *Usecase) GetSimilar(ctx context.Context, storyID uuid.UUID) ([]models.S
 		if !ok || s.Status != "published" {
 			continue
 		}
-		items = append(items, models.StoryListItem{
+		item := models.StoryListItem{
 			Story:         s,
 			Tags:          tagsMap[id],
 			ChaptersCount: counts[id],
 			LikesCount:    likes[id],
 			Author:        authors[id],
-		})
+		}
+		if url := covers[id]; url != "" {
+			item.CoverURL = &url
+		}
+		items = append(items, item)
 	}
 
 	return items, nil

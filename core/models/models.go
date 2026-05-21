@@ -36,6 +36,7 @@ type StoryListItem struct {
 	ChaptersCount int          `json:"chaptersCount"`
 	LikesCount    int          `json:"likesCount"`
 	Author        *StoryAuthor `json:"author,omitempty"`
+	CoverURL      *string      `json:"coverUrl,omitempty"`
 }
 
 type StoryDetail struct {

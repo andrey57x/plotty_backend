@@ -137,19 +137,24 @@ func (u *Usecase) buildListItems(ctx context.Context, ids []uuid.UUID, published
 	if err != nil {
 		return nil, err
 	}
+	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
 		s, ok := byID[id]
 		if !ok {
 			continue
 		}
-		items = append(items, models.StoryListItem{
+		item := models.StoryListItem{
 			Story:         s,
 			Tags:          tagsMap[id],
 			ChaptersCount: counts[id],
 			LikesCount:    likes[id],
 			Author:        authors[id],
-		})
+		}
+		if url := covers[id]; url != "" {
+			item.CoverURL = &url
+		}
+		items = append(items, item)
 	}
 	return items, nil
 }

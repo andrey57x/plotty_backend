@@ -686,6 +686,40 @@ func (r *Repository) GetAuthorForStory(ctx context.Context, storyID uuid.UUID) (
 	return m[storyID], nil
 }
 
+func (r *Repository) FirstChapterCoverURLs(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	out := make(map[uuid.UUID]string)
+	if len(storyIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT ON (c.story_id)
+			c.story_id,
+			gi.image_url
+		FROM chapters c
+		JOIN (
+			SELECT DISTINCT ON (chapter_id) chapter_id, image_url
+			FROM generated_images
+			WHERE chapter_id IS NOT NULL
+			ORDER BY chapter_id, created_at DESC
+		) gi ON gi.chapter_id = c.id
+		WHERE c.story_id = ANY($1)
+		ORDER BY c.story_id, c.created_at ASC
+	`, storyIDs)
+	if err != nil {
+		return nil, fmt.Errorf("story_repo.FirstChapterCoverURLs: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid uuid.UUID
+		var url string
+		if err := rows.Scan(&sid, &url); err != nil {
+			return nil, fmt.Errorf("story_repo.FirstChapterCoverURLs scan: %w", err)
+		}
+		out[sid] = url
+	}
+	return out, rows.Err()
+}
+
 func (r *Repository) Publish(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `UPDATE stories SET status = 'published', updated_at = $2 WHERE id = $1 AND status = 'draft'`, id, time.Now().UTC())
 	if err != nil {
