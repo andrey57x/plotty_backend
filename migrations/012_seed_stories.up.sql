@@ -11,8 +11,8 @@ BEGIN
     END IF;
 
     -- [1] Восьмой курс (harry-potter)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'a447bc05-65a3-5e7b-8fee-a9dea0e3608e', 'hp-vosmoy-kurs', 'Восьмой курс', 'published', v_author_id, 'После войны Гермиона возвращается в Хогвартс, чтобы доучиться. Замок цел, но тишина в нём звучит совсем иначе, чем прежде.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'a447bc05-65a3-5e7b-8fee-a9dea0e3608e', 'hp-vosmoy-kurs', 'Восьмой курс', 'published', v_author_id,
         '2026-04-19T12:00:00+00:00', '2026-05-19T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('a447bc05-65a3-5e7b-8fee-a9dea0e3608e', '10000001-0001-4001-8001-000000000001');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('a447bc05-65a3-5e7b-8fee-a9dea0e3608e', '10000004-0004-4004-8004-000000000002');
@@ -273,8 +273,8 @@ BEGIN
 — Пойдём, — сказала она. — Поезд не ждёт. Нас ждёт всё остальное.', 'published', '2026-04-23T12:00:00+00:00', '2026-04-23T13:00:00+00:00');
 
     -- [2] Хранитель запретной секции (harry-potter)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '67884b02-cda9-5985-9f06-615784cf0a28', 'hp-hranitel-zapretnoy-sekcii', 'Хранитель запретной секции', 'published', v_author_id, 'Невилл остаётся в Хогвартсе преподавать травологию и обнаруживает, что по ночам книги в библиотеке кто-то переставляет. Тайна оказывается добрее, чем он думал.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '67884b02-cda9-5985-9f06-615784cf0a28', 'hp-hranitel-zapretnoy-sekcii', 'Хранитель запретной секции', 'published', v_author_id,
         '2026-04-17T12:00:00+00:00', '2026-05-18T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('67884b02-cda9-5985-9f06-615784cf0a28', '10000001-0001-4001-8001-000000000001');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('67884b02-cda9-5985-9f06-615784cf0a28', '10000004-0004-4004-8004-000000000001');
@@ -421,8 +421,8 @@ BEGIN
 Потому что есть тайны, которые нужно раскрывать. А есть такие, которые нужно просто хранить — бережно, до конца, как хороший библиотекарь хранит любимую книгу.', 'published', '2026-04-19T12:00:00+00:00', '2026-04-19T13:00:00+00:00');
 
     -- [3] Зелье забытого лета (harry-potter)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '3ee228ac-7838-5cf1-9e43-b04dd666bb71', 'hp-zelye-zabytogo-leta', 'Зелье забытого лета', 'published', v_author_id, 'Полумна Лавгуд варит зелье, которое возвращает утраченные воспоминания. Но не все воспоминания стоит возвращать — некоторые лучше прожить заново.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '3ee228ac-7838-5cf1-9e43-b04dd666bb71', 'hp-zelye-zabytogo-leta', 'Зелье забытого лета', 'published', v_author_id,
         '2026-04-15T12:00:00+00:00', '2026-05-17T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('3ee228ac-7838-5cf1-9e43-b04dd666bb71', '10000001-0001-4001-8001-000000000001');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('3ee228ac-7838-5cf1-9e43-b04dd666bb71', '10000004-0004-4004-8004-000000000002');
@@ -545,8 +545,8 @@ BEGIN
 И ветер, тёплый и солёный, ответил ей, шевельнув волосы, — совсем как мамина рука когда-то.', 'published', '2026-04-17T12:00:00+00:00', '2026-04-17T13:00:00+00:00');
 
     -- [4] Капитан запасного состава (harry-potter)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'd60bf14a-784f-5235-9986-6a8fa0c9d4ad', 'hp-kapitan-zapasnogo-sostava', 'Капитан запасного состава', 'published', v_author_id, 'Джинни Уизли возвращается тренировать команду Гриффиндора по квиддичу — и обнаруживает, что собрала самый бесталанный, но самый дружный состав за всю историю факультета.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'd60bf14a-784f-5235-9986-6a8fa0c9d4ad', 'hp-kapitan-zapasnogo-sostava', 'Капитан запасного состава', 'published', v_author_id,
         '2026-04-13T12:00:00+00:00', '2026-05-16T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('d60bf14a-784f-5235-9986-6a8fa0c9d4ad', '10000001-0001-4001-8001-000000000001');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('d60bf14a-784f-5235-9986-6a8fa0c9d4ad', '10000004-0004-4004-8004-000000000001');
@@ -752,8 +752,8 @@ BEGIN
 Кривой кубок из старого котла Джинни хранила потом всю жизнь — на самом видном месте, впереди всех настоящих трофеев. Он того стоил.', 'published', '2026-04-16T12:00:00+00:00', '2026-04-16T13:00:00+00:00');
 
     -- [5] Карта, которой не было (harry-potter)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '83e3e42b-bc9f-5239-bcc8-162809dc1dad', 'hp-karta-kotoroy-ne-bylo', 'Карта, которой не было', 'published', v_author_id, 'Первокурсник Тео находит в старом классе обрывок незнакомой карты Хогвартса — на ней есть коридоры, которых нет в замке. Или они всё-таки есть?',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '83e3e42b-bc9f-5239-bcc8-162809dc1dad', 'hp-karta-kotoroy-ne-bylo', 'Карта, которой не было', 'published', v_author_id,
         '2026-04-11T12:00:00+00:00', '2026-05-15T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('83e3e42b-bc9f-5239-bcc8-162809dc1dad', '10000001-0001-4001-8001-000000000001');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('83e3e42b-bc9f-5239-bcc8-162809dc1dad', '10000004-0004-4004-8004-000000000001');
@@ -951,8 +951,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-04-14T12:00:00+00:00', '2026-04-14T13:00:00+00:00');
 
     -- [6] Северная башня (harry-potter)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'a626eee0-01ed-5953-b748-37a9c7615d43', 'hp-severnaya-bashnya', 'Северная башня', 'published', v_author_id, 'После войны молодая преподавательница защиты от тёмных искусств учится жить с потерями — и помогать в этом своим ученикам, у которых те же раны.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'a626eee0-01ed-5953-b748-37a9c7615d43', 'hp-severnaya-bashnya', 'Северная башня', 'published', v_author_id,
         '2026-04-09T12:00:00+00:00', '2026-05-14T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('a626eee0-01ed-5953-b748-37a9c7615d43', '10000001-0001-4001-8001-000000000001');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('a626eee0-01ed-5953-b748-37a9c7615d43', '10000004-0004-4004-8004-000000000002');
@@ -1162,8 +1162,8 @@ BEGIN
 Этому Элейн научилась сама. И этому научила их. И ради этого, поняла она наконец, стоило вернуться.', 'published', '2026-04-12T12:00:00+00:00', '2026-04-12T13:00:00+00:00');
 
     -- [7] Контракт на болоте (witcher)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '0c05b9a5-3ea0-5b27-8f4d-dd562150444a', 'witcher-kontrakt-na-bolote', 'Контракт на болоте', 'published', v_author_id, 'Геральт берётся за обычный контракт на болотную тварь, что таскает скот у деревни. Но чем дольше он идёт по следу, тем яснее: чудовище здесь — не то, на кого его наняли.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '0c05b9a5-3ea0-5b27-8f4d-dd562150444a', 'witcher-kontrakt-na-bolote', 'Контракт на болоте', 'published', v_author_id,
         '2026-04-07T12:00:00+00:00', '2026-05-13T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('0c05b9a5-3ea0-5b27-8f4d-dd562150444a', '10000001-0001-4001-8001-000000000002');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('0c05b9a5-3ea0-5b27-8f4d-dd562150444a', '10000004-0004-4004-8004-000000000002');
@@ -1334,8 +1334,8 @@ BEGIN
 Болото провожало его той же мёртвой тишиной. Но теперь ведьмак знал, что в этой тишине живёт не убийца, а старый одинокий хранитель, который однажды поступил человечнее иных людей. И, трясясь в седле сквозь редеющий туман, Геральт думал, что мир иногда удивительно несправедлив в том, кого зовёт монстром.', 'published', '2026-04-10T12:00:00+00:00', '2026-04-10T13:00:00+00:00');
 
     -- [8] Найдёныш (witcher)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '16b46de6-7655-5139-8cba-e6a360e66bd7', 'witcher-naydyonysh', 'Найдёныш', 'published', v_author_id, 'Геральт находит на разорённом тракте девочку, единственную, кто выжил после нападения. Он не умеет растить детей — но и бросить её не может. Дорога научит обоих.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '16b46de6-7655-5139-8cba-e6a360e66bd7', 'witcher-naydyonysh', 'Найдёныш', 'published', v_author_id,
         '2026-04-05T12:00:00+00:00', '2026-05-12T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('16b46de6-7655-5139-8cba-e6a360e66bd7', '10000001-0001-4001-8001-000000000002');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('16b46de6-7655-5139-8cba-e6a360e66bd7', '10000004-0004-4004-8004-000000000002');
@@ -1525,8 +1525,8 @@ BEGIN
 А сам он, разводя ночами костёр всё так же — одинаково, по привычке, въевшейся за те две недели, — иногда ловил себя на том, что готовит похлёбки чуть больше, чем нужно одному. И тогда смотрел на куклу, усмехался краем губ и вспоминал девочку, которая научилась не бояться темноты. И которая, сама того не зная, научила старого ведьмака кое-чему, чего не было ни в одном эликсире и ни на одном Пути.', 'published', '2026-04-08T12:00:00+00:00', '2026-04-08T13:00:00+00:00');
 
     -- [9] Бард без голоса (witcher)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '275cd5f3-ebee-5ba5-93df-c7f0b3b488ba', 'witcher-bard-bez-golosa', 'Бард без голоса', 'published', v_author_id, 'Знаменитый бард Лютик просыпается без голоса накануне главного выступления своей жизни. Лекари разводят руками. Придётся искать причину — и, кажется, она спрятана в нём самом.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '275cd5f3-ebee-5ba5-93df-c7f0b3b488ba', 'witcher-bard-bez-golosa', 'Бард без голоса', 'published', v_author_id,
         '2026-04-03T12:00:00+00:00', '2026-05-11T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('275cd5f3-ebee-5ba5-93df-c7f0b3b488ba', '10000001-0001-4001-8001-000000000002');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('275cd5f3-ebee-5ba5-93df-c7f0b3b488ba', '10000004-0004-4004-8004-000000000001');
@@ -1629,8 +1629,8 @@ BEGIN
 Тем вечером Лютик понял о своём ремесле то, чего не понимал за все годы славы. Голос даётся не для того, чтобы блистать. Он даётся, чтобы говорить то, что важно, — пока не поздно, пока есть кому слушать. И он поклялся себе больше никогда не запирать в себе слова, которые нужно сказать. Ни мёртвым. А главное — ни живым.', 'published', '2026-04-05T12:00:00+00:00', '2026-04-05T13:00:00+00:00');
 
     -- [10] Знак на ладони (witcher)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '13069529-93bd-557a-811b-8f4e4ab54af5', 'witcher-znak-na-ladoni', 'Знак на ладони', 'published', v_author_id, 'Молодой ведьмак, только что сошедший с тропы испытаний, берётся за первый самостоятельный контракт. Он знает все Знаки наизусть — но не знает ещё, что чудовища бывают разными.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '13069529-93bd-557a-811b-8f4e4ab54af5', 'witcher-znak-na-ladoni', 'Знак на ладони', 'published', v_author_id,
         '2026-04-01T12:00:00+00:00', '2026-05-10T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('13069529-93bd-557a-811b-8f4e4ab54af5', '10000001-0001-4001-8001-000000000002');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('13069529-93bd-557a-811b-8f4e4ab54af5', '10000004-0004-4004-8004-000000000002');
@@ -1770,8 +1770,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-04-03T12:00:00+00:00', '2026-04-03T13:00:00+00:00');
 
     -- [11] Аптекарша из Оксенфурта (witcher)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'e1dd0f00-4424-5308-9942-beb4c2f64e8c', 'witcher-aptekarsha-iz-oksenfurta', 'Аптекарша из Оксенфурта', 'published', v_author_id, 'В лавке травницы Власты по ночам кто-то переставляет склянки и оставляет монеты за снадобья, которых она не продавала. Разгадка приведёт её к старому долгу и нежданной дружбе.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'e1dd0f00-4424-5308-9942-beb4c2f64e8c', 'witcher-aptekarsha-iz-oksenfurta', 'Аптекарша из Оксенфурта', 'published', v_author_id,
         '2026-03-30T12:00:00+00:00', '2026-05-09T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('e1dd0f00-4424-5308-9942-beb4c2f64e8c', '10000001-0001-4001-8001-000000000002');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('e1dd0f00-4424-5308-9942-beb4c2f64e8c', '10000004-0004-4004-8004-000000000001');
@@ -1949,8 +1949,8 @@ BEGIN
 Свет вспыхнул в последний раз — и погас. В лавке стало тихо и пусто, но это была не та пустота, что прежде. Тёплая, спокойная. Власта постояла в темноте, утирая глаза, а потом убрала с полок все накопленные призраком монеты в отдельный мешочек — и наутро раздала их беднякам у храма, в память о добром аптекаре Богумиле, который наконец обрёл покой.', 'published', '2026-04-02T12:00:00+00:00', '2026-04-02T13:00:00+00:00');
 
     -- [12] Брод через Бруинен (lord-of-the-rings)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'fad42d2c-d28a-58a8-b00c-4ac22ae7b882', 'lotr-brod-cherez-bruinen', 'Брод через Бруинен', 'published', v_author_id, 'Молодой следопыт Севера в одиночку стережёт древний брод, через который к Раздолу тянутся беженцы. Орки идут по пятам, а помощи ждать неоткуда — кроме той, что внутри тебя самого.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'fad42d2c-d28a-58a8-b00c-4ac22ae7b882', 'lotr-brod-cherez-bruinen', 'Брод через Бруинен', 'published', v_author_id,
         '2026-03-28T12:00:00+00:00', '2026-05-08T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('fad42d2c-d28a-58a8-b00c-4ac22ae7b882', '10000001-0001-4001-8001-000000000003');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('fad42d2c-d28a-58a8-b00c-4ac22ae7b882', '10000004-0004-4004-8004-000000000002');
@@ -2121,8 +2121,8 @@ BEGIN
 Халдар откинулся назад и впервые за эту страшную ночь улыбнулся. Над горами на западе разгорался рассвет, золотя вершины, и где-то там, в долине, лежал спасённый Раздол, куда дошли все до единого. Брод был удержан. Север стоял. А значит, всё было не зря — и одинокая стража у студёной воды обрела наконец свой тихий, заслуженный смысл.', 'published', '2026-03-31T12:00:00+00:00', '2026-03-31T13:00:00+00:00');
 
     -- [13] Сад после похода (lord-of-the-rings)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'c9f914b9-109c-5b41-ba23-639fccd36de9', 'lotr-sad-posle-pohoda', 'Сад после похода', 'published', v_author_id, 'Война Кольца окончена. Сэм возвращается в разорённый Шир и берётся за самое мирное и самое важное дело своей жизни — заново вырастить то, что было вытоптано.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'c9f914b9-109c-5b41-ba23-639fccd36de9', 'lotr-sad-posle-pohoda', 'Сад после похода', 'published', v_author_id,
         '2026-03-26T12:00:00+00:00', '2026-05-07T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('c9f914b9-109c-5b41-ba23-639fccd36de9', '10000001-0001-4001-8001-000000000003');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('c9f914b9-109c-5b41-ba23-639fccd36de9', '10000004-0004-4004-8004-000000000001');
@@ -2233,8 +2233,8 @@ BEGIN
 И, глядя, как под золотым мэллорном смеются дети, Сэм понимал, что обрёл наконец то, за чем, сам того не зная, шёл через весь Мордор и обратно. Не славу. Не покой даже. А простую, тихую радость человека, который своими руками вернул в мир красоту. Ради этого, думал он, и стоило возвращаться домой.', 'published', '2026-03-28T12:00:00+00:00', '2026-03-28T13:00:00+00:00');
 
     -- [14] Песнь о двух деревьях (lord-of-the-rings)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'c529dc1e-878e-56f9-9caa-698addcf1cd4', 'lotr-pesn-o-dvuh-derevyah', 'Песнь о двух деревьях', 'published', v_author_id, 'Юная эльфийка, хранительница садов в потаённой долине, должна решить: уплыть с сородичами за Море, оставив всё, что любит, — или остаться и угаснуть вместе с тем, что хранит.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'c529dc1e-878e-56f9-9caa-698addcf1cd4', 'lotr-pesn-o-dvuh-derevyah', 'Песнь о двух деревьях', 'published', v_author_id,
         '2026-03-24T12:00:00+00:00', '2026-05-06T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('c529dc1e-878e-56f9-9caa-698addcf1cd4', '10000001-0001-4001-8001-000000000003');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('c529dc1e-878e-56f9-9caa-698addcf1cd4', '10000004-0004-4004-8004-000000000001');
@@ -2380,8 +2380,8 @@ BEGIN
 А Нэрвен, уже не юная, но всё такая же светлая, хранит эти сады — как хранила те, первые. И когда кто-нибудь из молодых эльфов, родившихся уже здесь, за Морем, спрашивает её, откуда взялись эти дивные деревья, она улыбается и рассказывает им песнь о двух деревьях — о долине в тумане, о свете, что не гаснет, и о том, что любовь садовника сильнее даже конца целой эпохи. И они слушают, не зная, что сидят в тени той самой долины, которую она увезла с собой через Море — в горстке семян и в верном сердце.', 'published', '2026-03-27T12:00:00+00:00', '2026-03-27T13:00:00+00:00');
 
     -- [15] Гном и звёздная карта (lord-of-the-rings)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'b4984ed5-b404-5fe3-a449-ab50890841ac', 'lotr-gnom-i-zvyozdnaya-karta', 'Гном и звёздная карта', 'published', v_author_id, 'Упрямый гном-картограф уверен, что под горами спрятан утраченный чертог его предков. Все смеются над его картой — все, кроме одного любопытного хоббита и одной очень старой загадки.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'b4984ed5-b404-5fe3-a449-ab50890841ac', 'lotr-gnom-i-zvyozdnaya-karta', 'Гном и звёздная карта', 'published', v_author_id,
         '2026-03-22T12:00:00+00:00', '2026-05-05T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('b4984ed5-b404-5fe3-a449-ab50890841ac', '10000001-0001-4001-8001-000000000003');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('b4984ed5-b404-5fe3-a449-ab50890841ac', '10000004-0004-4004-8004-000000000001');
@@ -2520,8 +2520,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-03-24T12:00:00+00:00', '2026-03-24T13:00:00+00:00');
 
     -- [16] Свиток без техник (naruto)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '198b8fdb-bebd-5056-8772-2a4f6a1199f8', 'naruto-svitok-bez-tehnik', 'Свиток без техник', 'published', v_author_id, 'Юный генин Кэта получает в наследство от деда-легенды запечатанный свиток и мечтает найти в нём могущественную технику. Но внутри оказываются письма — и они меняют всё.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '198b8fdb-bebd-5056-8772-2a4f6a1199f8', 'naruto-svitok-bez-tehnik', 'Свиток без техник', 'published', v_author_id,
         '2026-03-20T12:00:00+00:00', '2026-05-04T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('198b8fdb-bebd-5056-8772-2a4f6a1199f8', '10000001-0001-4001-8001-000000000004');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('198b8fdb-bebd-5056-8772-2a4f6a1199f8', '10000004-0004-4004-8004-000000000001');
@@ -2655,8 +2655,8 @@ BEGIN
 И когда годы спустя у Кэты появились свои ученики, он передал им не свиток с боевыми техниками. Он передал им этот, дедовский, — со старыми письмами и своей припиской в конце. «Ищите силу, — писал он. — Это правильно. Но не забудьте за поисками силы сказать главное тем, кого любите. Этому дзюцу нет равных. Я знаю. Меня научил мой дед — письмами, которые так и не отправил».', 'published', '2026-03-23T12:00:00+00:00', '2026-03-23T13:00:00+00:00');
 
     -- [17] Команда из троих (naruto)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '873a21c6-f5b6-5645-a892-138ecc17d302', 'naruto-komanda-iz-troih', 'Команда из троих', 'published', v_author_id, 'Трое новоиспечённых генинов, которые терпеть не могут друг друга, получают первое настоящее задание. Чтобы выжить, им придётся научиться тому, чему не учат в академии, — доверию.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '873a21c6-f5b6-5645-a892-138ecc17d302', 'naruto-komanda-iz-troih', 'Команда из троих', 'published', v_author_id,
         '2026-03-18T12:00:00+00:00', '2026-05-03T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('873a21c6-f5b6-5645-a892-138ecc17d302', '10000001-0001-4001-8001-000000000004');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('873a21c6-f5b6-5645-a892-138ecc17d302', '10000004-0004-4004-8004-000000000002');
@@ -2819,8 +2819,8 @@ BEGIN
 А три юных шиноби шагали по дороге домой — усталые, израненные, но впервые по-настоящему сильные. Они так и не выучили в той вылазке ни одной новой техники. Зато научились главному, чему не учат в академии: что один в поле не воин, а трое, что стоят друг за друга, способны выстоять там, где поодиночке сгинул бы каждый. И эту науку они не забудут до конца своего пути.', 'published', '2026-03-21T12:00:00+00:00', '2026-03-21T13:00:00+00:00');
 
     -- [18] Чайная на границе (naruto)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '891d5637-f3c4-5096-b4d7-38557e4a86f3', 'naruto-chaynaya-na-granice', 'Чайная на границе', 'published', v_author_id, 'Бывший шиноби, уставший от войны, держит маленькую чайную на границе двух земель. К нему заходят и друзья, и враги — и за чашкой чая он находит способ мирить тех, кого развела вражда.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '891d5637-f3c4-5096-b4d7-38557e4a86f3', 'naruto-chaynaya-na-granice', 'Чайная на границе', 'published', v_author_id,
         '2026-03-16T12:00:00+00:00', '2026-05-02T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('891d5637-f3c4-5096-b4d7-38557e4a86f3', '10000001-0001-4001-8001-000000000004');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('891d5637-f3c4-5096-b4d7-38557e4a86f3', '10000004-0004-4004-8004-000000000001');
@@ -2939,8 +2939,8 @@ BEGIN
 И его старый товарищ, большой и важный человек, начал говорить — то, что носил в себе годами и не мог сказать никому. А Дзиро слушал, кивал и подливал чай, как делал это для сотен других. За окном садилось солнце, в очаге потрескивали дрова, и в маленькой чайной на границе двух враждующих земель снова, как и каждый день, тихо и незаметно творилось то, что важнее любых побед, — человек переставал быть один на один со своей болью. А значит, в мире становилось чуть больше мира.', 'published', '2026-03-18T12:00:00+00:00', '2026-03-18T13:00:00+00:00');
 
     -- [19] Печать на сердце (naruto)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '09e83347-ec2d-56d8-a150-a22593a037c7', 'naruto-pechat-na-serdce', 'Печать на сердце', 'published', v_author_id, 'Девочка, в которой с рождения запечатан могучий и опасный дух, растёт изгоем — пока не встречает того, кто видит в ней не оружие и не угрозу, а просто человека.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '09e83347-ec2d-56d8-a150-a22593a037c7', 'naruto-pechat-na-serdce', 'Печать на сердце', 'published', v_author_id,
         '2026-03-14T12:00:00+00:00', '2026-05-01T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('09e83347-ec2d-56d8-a150-a22593a037c7', '10000001-0001-4001-8001-000000000004');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('09e83347-ec2d-56d8-a150-a22593a037c7', '10000004-0004-4004-8004-000000000002');
@@ -3075,8 +3075,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-03-16T12:00:00+00:00', '2026-03-16T13:00:00+00:00');
 
     -- [20] Экзамен на стойкость (naruto)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '02addfa3-7940-5beb-bc25-1bb81fbcf8f8', 'naruto-ekzamen-na-stoykost', 'Экзамен на стойкость', 'published', v_author_id, 'На экзамене для будущих чунинов главное испытание оказывается не в силе техник, а в выборе: победить любой ценой — или остаться тем, кем хочешь быть.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '02addfa3-7940-5beb-bc25-1bb81fbcf8f8', 'naruto-ekzamen-na-stoykost', 'Экзамен на стойкость', 'published', v_author_id,
         '2026-03-12T12:00:00+00:00', '2026-04-30T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('02addfa3-7940-5beb-bc25-1bb81fbcf8f8', '10000001-0001-4001-8001-000000000004');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('02addfa3-7940-5beb-bc25-1bb81fbcf8f8', '10000004-0004-4004-8004-000000000002');
@@ -3239,8 +3239,8 @@ BEGIN
 Потому что деревни держатся не на сильнейших. Они держатся на тех, кто остаётся человеком, когда никто не смотрит и можно всё. Этому Сора научился в Лесу испытаний. И это, единственное по-настоящему, он хотел передать дальше.', 'published', '2026-03-15T12:00:00+00:00', '2026-03-15T13:00:00+00:00');
 
     -- [21] Стажёрка Старк Индастриз (marvel)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '5d6392c5-e92a-578c-beee-0c97566baa70', 'marvel-stazhyorka-stark-industries', 'Стажёрка Старк Индастриз', 'published', v_author_id, 'Лена — обычная стажёрка в башне Старка, без суперсилы и брони. Когда системы здания выходят из строя в самый неподходящий момент, спасать положение приходится не герою, а ей.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '5d6392c5-e92a-578c-beee-0c97566baa70', 'marvel-stazhyorka-stark-industries', 'Стажёрка Старк Индастриз', 'published', v_author_id,
         '2026-03-10T12:00:00+00:00', '2026-04-29T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('5d6392c5-e92a-578c-beee-0c97566baa70', '10000001-0001-4001-8001-000000000005');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('5d6392c5-e92a-578c-beee-0c97566baa70', '10000004-0004-4004-8004-000000000001');
@@ -3406,8 +3406,8 @@ BEGIN
 И Лена, бывшая стажёрка, мечтавшая о великих делах, впервые подумала, что, может быть, уже их делает. Просто эти дела не блестят. А жизни спасают ничуть не хуже.', 'published', '2026-03-13T12:00:00+00:00', '2026-03-13T13:00:00+00:00');
 
     -- [22] Тихий герой (marvel)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '834f81fc-c35a-5279-a7f7-7eaf17341abe', 'marvel-tihiy-geroy', 'Тихий герой', 'published', v_author_id, 'У Мартина скромная сила — он чувствует, что у людей на душе, и может ненадолго снять чужую боль. Не спасая мир и не сражаясь со злодеями, он находит способ быть героем по-своему.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '834f81fc-c35a-5279-a7f7-7eaf17341abe', 'marvel-tihiy-geroy', 'Тихий герой', 'published', v_author_id,
         '2026-03-08T12:00:00+00:00', '2026-04-28T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('834f81fc-c35a-5279-a7f7-7eaf17341abe', '10000001-0001-4001-8001-000000000005');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('834f81fc-c35a-5279-a7f7-7eaf17341abe', '10000004-0004-4004-8004-000000000002');
@@ -3540,8 +3540,8 @@ BEGIN
 Мартин слушал, и впервые за долгое время чувствовал, как чья-то забота согревает его самого. Колодец, который он считал высохшим навсегда, начал понемногу наполняться снова — потому что тот, кого он когда-то спас, теперь спасал его. И в этом, понял Мартин, и был ответ. Никто не может ловить других вечно в одиночку. Но если ловцы ловят друг друга по очереди — не упадёт никто.', 'published', '2026-03-11T12:00:00+00:00', '2026-03-11T13:00:00+00:00');
 
     -- [23] Ночная смена (marvel)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '80d30761-8f07-584d-bcf5-ebd5e47a5a2c', 'marvel-nochnaya-smena', 'Ночная смена', 'published', v_author_id, 'Медсестра ночной смены в захолустной больнице обнаруживает, что один из её пациентов — уличный герой, которого приносят с травмами слишком часто. И решает, что хватит латать — пора помочь.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '80d30761-8f07-584d-bcf5-ebd5e47a5a2c', 'marvel-nochnaya-smena', 'Ночная смена', 'published', v_author_id,
         '2026-03-06T12:00:00+00:00', '2026-04-27T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('80d30761-8f07-584d-bcf5-ebd5e47a5a2c', '10000001-0001-4001-8001-000000000005');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('80d30761-8f07-584d-bcf5-ebd5e47a5a2c', '10000004-0004-4004-8004-000000000002');
@@ -3665,8 +3665,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-03-08T12:00:00+00:00', '2026-03-08T13:00:00+00:00');
 
     -- [24] Лаборатория номер семь (marvel)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'b8f57f1e-c060-59b6-83b2-66ad327415f2', 'marvel-laboratoriya-nomer-sem', 'Лаборатория номер семь', 'published', v_author_id, 'Молодой учёный обнаруживает, что в заброшенной лаборатории его института по ночам продолжаются исследования — хотя проект закрыли годы назад. Кто и зачем их ведёт?',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'b8f57f1e-c060-59b6-83b2-66ad327415f2', 'marvel-laboratoriya-nomer-sem', 'Лаборатория номер семь', 'published', v_author_id,
         '2026-03-04T12:00:00+00:00', '2026-04-26T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('b8f57f1e-c060-59b6-83b2-66ad327415f2', '10000001-0001-4001-8001-000000000005');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('b8f57f1e-c060-59b6-83b2-66ad327415f2', '10000004-0004-4004-8004-000000000002');
@@ -3820,8 +3820,8 @@ BEGIN
 А главное он понял, глядя, как немолодой профессор, помолодевший лет на десять, ведёт уже настоящую большую команду к лекарству, которое спасёт многих. Самые важные дела часто делаются не на виду и не сразу. Иногда они годами теплятся в темноте, в забытых лабораториях, в упрямых сердцах тех, кто не сдался, — и ждут лишь одного: чтобы кто-нибудь увидел свет под дверью и не прошёл мимо.', 'published', '2026-03-07T12:00:00+00:00', '2026-03-07T13:00:00+00:00');
 
     -- [25] Письма Стражам (marvel)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '4a4b27bf-51aa-570d-b957-91f3b417733f', 'marvel-pisma-strazham', 'Письма Стражам', 'published', v_author_id, 'Восьмилетний мальчик из приюта пишет письма любимым героям, не надеясь на ответ. Но однажды ответ приходит — и за ним стоит совсем не тот, о ком мальчик думал.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '4a4b27bf-51aa-570d-b957-91f3b417733f', 'marvel-pisma-strazham', 'Письма Стражам', 'published', v_author_id,
         '2026-03-02T12:00:00+00:00', '2026-04-25T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('4a4b27bf-51aa-570d-b957-91f3b417733f', '10000001-0001-4001-8001-000000000005');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('4a4b27bf-51aa-570d-b957-91f3b417733f', '10000004-0004-4004-8004-000000000001');
@@ -3932,8 +3932,8 @@ BEGIN
 — Значит, вы ещё лучше. Герою-то, может, и нетрудно — он сильный, ему положено. А вы не герой. Вам никто не велел мне писать. Вы просто сами захотели, чтоб мне не было одиноко. Это же... это же добрее, чем мир спасать. Спасибо вам, дядя Сэмюэл.', 'published', '2026-03-04T12:00:00+00:00', '2026-03-04T13:00:00+00:00');
 
     -- [26] Сигнал над городом (dc)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '6f3898ae-9bfb-557e-814e-b6b498316ddd', 'dc-signal-nad-gorodom', 'Сигнал над городом', 'published', v_author_id, 'Старый диспетчер полиции каждую ночь зажигает над городом сигнал-прожектор, вызывая героя. Но однажды герой не приходит — и спасать город придётся тем, кто остался внизу.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '6f3898ae-9bfb-557e-814e-b6b498316ddd', 'dc-signal-nad-gorodom', 'Сигнал над городом', 'published', v_author_id,
         '2026-02-28T12:00:00+00:00', '2026-04-24T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('6f3898ae-9bfb-557e-814e-b6b498316ddd', '10000001-0001-4001-8001-000000000006');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('6f3898ae-9bfb-557e-814e-b6b498316ddd', '10000004-0004-4004-8004-000000000002');
@@ -4087,8 +4087,8 @@ BEGIN
 Герой кивнул, и Альберту показалось, что под маской тот улыбается. А старый диспетчер снова взялся за тряпку и принялся начищать линзу прожектора — к новой ночи, к новому сигналу, к новой надежде, которую теперь, он знал, было кому оправдать. Всем городом.', 'published', '2026-03-03T12:00:00+00:00', '2026-03-03T13:00:00+00:00');
 
     -- [27] Тот, кто чинит (dc)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '277ec56b-4910-5b4e-b14e-4a137efe8290', 'dc-tot-kto-chinit', 'Тот, кто чинит', 'published', v_author_id, 'В подвальной мастерской живёт старый механик, который чинит снаряжение городского героя. Он не носит маску и не ловит злодеев — но без него не было бы ни одной победы.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '277ec56b-4910-5b4e-b14e-4a137efe8290', 'dc-tot-kto-chinit', 'Тот, кто чинит', 'published', v_author_id,
         '2026-02-26T12:00:00+00:00', '2026-04-23T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('277ec56b-4910-5b4e-b14e-4a137efe8290', '10000001-0001-4001-8001-000000000006');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('277ec56b-4910-5b4e-b14e-4a137efe8290', '10000004-0004-4004-8004-000000000001');
@@ -4250,8 +4250,8 @@ BEGIN
 И Витторио был горд, что прожил жизнь одним из них. Не героем на свету. А опорой в тени, без которой свет не светил бы. Это, считал он, и было настоящим мастерством — не только рук, но и души.', 'published', '2026-03-01T12:00:00+00:00', '2026-03-01T13:00:00+00:00');
 
     -- [28] Музей в полночь (dc)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'fa7d1739-fb28-5460-8888-a79b3517fed7', 'dc-muzey-v-polnoch', 'Музей в полночь', 'published', v_author_id, 'Ночной сторож музея замечает, что таинственный вор не крадёт экспонаты, а возвращает давно украденные. За этой загадкой стоит история об ошибке, которую кто-то хочет исправить.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'fa7d1739-fb28-5460-8888-a79b3517fed7', 'dc-muzey-v-polnoch', 'Музей в полночь', 'published', v_author_id,
         '2026-02-24T12:00:00+00:00', '2026-04-22T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('fa7d1739-fb28-5460-8888-a79b3517fed7', '10000001-0001-4001-8001-000000000006');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('fa7d1739-fb28-5460-8888-a79b3517fed7', '10000004-0004-4004-8004-000000000002');
@@ -4413,8 +4413,8 @@ BEGIN
 Гарольд не жалел о своём выборе ни единого дня. Он знал, что поступил не по букве закона. Но он был твёрдо уверен, что поступил по его духу — потому что закон, в сущности, и существует ради того, чтобы украденное возвращалось домой. А оно вернулось. Куда больше, чем могло бы вернуться из-за решётки.', 'published', '2026-02-27T12:00:00+00:00', '2026-02-27T13:00:00+00:00');
 
     -- [29] Маленький город, большой страх (dc)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '6079e7b4-0ce0-5a05-bb91-6fa50f67363d', 'dc-malenkiy-gorod-bolshoy-strah', 'Маленький город, большой страх', 'published', v_author_id, 'В городке, где никогда не было своего героя, обычная учительница решает, что хватит ждать спасителя со стороны. Иногда защитник города — это просто тот, кто первым перестал бояться.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '6079e7b4-0ce0-5a05-bb91-6fa50f67363d', 'dc-malenkiy-gorod-bolshoy-strah', 'Маленький город, большой страх', 'published', v_author_id,
         '2026-02-22T12:00:00+00:00', '2026-04-21T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('6079e7b4-0ce0-5a05-bb91-6fa50f67363d', '10000001-0001-4001-8001-000000000006');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('6079e7b4-0ce0-5a05-bb91-6fa50f67363d', '10000004-0004-4004-8004-000000000002');
@@ -4526,8 +4526,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-02-24T12:00:00+00:00', '2026-02-24T13:00:00+00:00');
 
     -- [30] Дело о пустой квартире (sherlock)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '11acb9b6-0358-5b92-928a-7e30321c3c9d', 'sherlock-delo-o-pustoy-kvartire', 'Дело о пустой квартире', 'published', v_author_id, 'Консультирующий детектив Эшфорд берётся за дело об исчезновении человека из запертой изнутри квартиры. Разгадка окажется не в том, как он исчез, а в том, почему хотел исчезнуть.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '11acb9b6-0358-5b92-928a-7e30321c3c9d', 'sherlock-delo-o-pustoy-kvartire', 'Дело о пустой квартире', 'published', v_author_id,
         '2026-02-20T12:00:00+00:00', '2026-04-20T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('11acb9b6-0358-5b92-928a-7e30321c3c9d', '10000001-0001-4001-8001-000000000007');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('11acb9b6-0358-5b92-928a-7e30321c3c9d', '10000004-0004-4004-8004-000000000002');
@@ -4697,8 +4697,8 @@ BEGIN
 — И не выдам, — ответил Эшфорд. — Он совершил ошибку и заплатил за неё годами страха — довольно. Шантажист в тюрьме, угроза снята. Пусть Кроуфорд, где бы он ни был, однажды узнает из газет, что его мучитель пойман, и вернётся к жизни, если захочет. Видите ли, Хейл, закон ловит виновных. А наше с вами ремесло, если оно чего-то стоит, иногда должно ещё и отличать виноватого от несчастного. Это, признаюсь, куда труднее любой запертой комнаты — и куда важнее.', 'published', '2026-02-23T12:00:00+00:00', '2026-02-23T13:00:00+00:00');
 
     -- [31] Квартирантка с Бейкер-стрит (sherlock)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '2d49bbb2-645b-5d76-a9f0-5155dcc4d297', 'sherlock-kvartirantka-s-beyker-strit', 'Квартирантка с Бейкер-стрит', 'published', v_author_id, 'Молодая гувернантка снимает комнату у знаменитого детектива и неожиданно для себя становится его ученицей. Оказывается, наблюдательность — это не дар, а навык, которому можно научиться.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '2d49bbb2-645b-5d76-a9f0-5155dcc4d297', 'sherlock-kvartirantka-s-beyker-strit', 'Квартирантка с Бейкер-стрит', 'published', v_author_id,
         '2026-02-18T12:00:00+00:00', '2026-04-19T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('2d49bbb2-645b-5d76-a9f0-5155dcc4d297', '10000001-0001-4001-8001-000000000007');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('2d49bbb2-645b-5d76-a9f0-5155dcc4d297', '10000004-0004-4004-8004-000000000001');
@@ -4840,8 +4840,8 @@ BEGIN
 И мисс Эвелин Грей, бывшая гувернантка, а ныне сыщица с Бейкер-стрит, вернулась к своим записям, чувствуя то спокойное счастье, какое даёт человеку найденное наконец своё дело. Глаза, которые научились видеть, она знала теперь, уже не разучатся — и впереди её ждал целый город, полный загадок, и целая жизнь, чтобы их разгадывать.', 'published', '2026-02-21T12:00:00+00:00', '2026-02-21T13:00:00+00:00');
 
     -- [32] Скрипка в тумане (sherlock)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'f9044880-ab7e-51df-bcc5-2f82e55244b2', 'sherlock-skripka-v-tumane', 'Скрипка в тумане', 'published', v_author_id, 'Детектив берётся за дело, в котором единственная улика — мелодия, которую кто-то играет на скрипке в одно и то же время каждую ночь. За музыкой скрывается давняя, почти забытая трагедия.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'f9044880-ab7e-51df-bcc5-2f82e55244b2', 'sherlock-skripka-v-tumane', 'Скрипка в тумане', 'published', v_author_id,
         '2026-02-16T12:00:00+00:00', '2026-04-18T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('f9044880-ab7e-51df-bcc5-2f82e55244b2', '10000001-0001-4001-8001-000000000007');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('f9044880-ab7e-51df-bcc5-2f82e55244b2', '10000004-0004-4004-8004-000000000002');
@@ -4968,8 +4968,8 @@ BEGIN
 — Какие же?', 'published', '2026-02-18T12:00:00+00:00', '2026-02-18T13:00:00+00:00');
 
     -- [33] Последнее дело доктора (sherlock)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '35dc7d7d-7be0-540e-8cdc-0763418c8314', 'sherlock-poslednee-delo-doktora', 'Последнее дело доктора', 'published', v_author_id, 'Когда знаменитый детектив уезжает, его верный спутник-доктор впервые остаётся один на один с загадкой. И обнаруживает, что годы рядом с гением научили его большему, чем он думал.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '35dc7d7d-7be0-540e-8cdc-0763418c8314', 'sherlock-poslednee-delo-doktora', 'Последнее дело доктора', 'published', v_author_id,
         '2026-02-14T12:00:00+00:00', '2026-04-17T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('35dc7d7d-7be0-540e-8cdc-0763418c8314', '10000001-0001-4001-8001-000000000007');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('35dc7d7d-7be0-540e-8cdc-0763418c8314', '10000004-0004-4004-8004-000000000002');
@@ -5119,8 +5119,8 @@ BEGIN
 За окном привычно клубился лондонский туман, в камине потрескивал огонь, и на Бейкер-стрит всё было как прежде — и всё же чуть иначе. Ибо теперь под этой крышей жили не гений и его тень, а двое людей, каждый из которых умел искать правду. И мир от этого стал самую малость безопаснее.', 'published', '2026-02-17T12:00:00+00:00', '2026-02-17T13:00:00+00:00');
 
     -- [34] Механик с Внешнего кольца (star-wars)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'a8b01144-8ffe-57cd-856f-4805b4c40999', 'sw-mehanik-s-vneshnego-kolca', 'Механик с Внешнего кольца', 'published', v_author_id, 'На пыльной планете Внешнего кольца живёт девочка-механик, которая чинит всё на свете. Когда у её порога терпит крушение незнакомец, обычная жизнь заканчивается — и начинается настоящая.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'a8b01144-8ffe-57cd-856f-4805b4c40999', 'sw-mehanik-s-vneshnego-kolca', 'Механик с Внешнего кольца', 'published', v_author_id,
         '2026-02-12T12:00:00+00:00', '2026-04-16T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('a8b01144-8ffe-57cd-856f-4805b4c40999', '10000001-0001-4001-8001-000000000008');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('a8b01144-8ffe-57cd-856f-4805b4c40999', '10000004-0004-4004-8004-000000000002');
@@ -5286,8 +5286,8 @@ BEGIN
 Корр усмехнулся и направил корабль к мерцающей точке вдалеке — к своим, к беженцам, к той самой борьбе, что шла за тысячи парсеков от пыльного Тэррик-IV. А чумазая девочка-механик с края галактики летела навстречу своей новой судьбе — и впервые в жизни была совершенно, до головокружения счастлива.', 'published', '2026-02-15T12:00:00+00:00', '2026-02-15T13:00:00+00:00');
 
     -- [35] Падаван без меча (star-wars)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '956ee064-d3a9-57fe-9db6-3294cc3f0652', 'sw-padavan-bez-mecha', 'Падаван без меча', 'published', v_author_id, 'Юный ученик ордена не годится в воины — он слаб в бою и роняет световой меч. Но именно ему открывается то, что важнее любого клинка: путь миротворца.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '956ee064-d3a9-57fe-9db6-3294cc3f0652', 'sw-padavan-bez-mecha', 'Падаван без меча', 'published', v_author_id,
         '2026-02-10T12:00:00+00:00', '2026-04-15T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('956ee064-d3a9-57fe-9db6-3294cc3f0652', '10000001-0001-4001-8001-000000000008');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('956ee064-d3a9-57fe-9db6-3294cc3f0652', '10000004-0004-4004-8004-000000000002');
@@ -5421,8 +5421,8 @@ BEGIN
 — Сила ведёт каждого своей дорогой, — сказал он наконец. — Тебя — дорогой меча. Меня — дорогой мира. Обе нужны галактике. Просто о моей реже слагают легенды. Зато по ней, — он улыбнулся, — куда меньше крови. И, знаешь, я ни на что бы её не променял.', 'published', '2026-02-13T12:00:00+00:00', '2026-02-13T13:00:00+00:00');
 
     -- [36] Контрабандистка с совестью (star-wars)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '30ce014f-65dd-5fc3-a726-e4ea686983ff', 'sw-kontrabandistka-s-sovestyu', 'Контрабандистка с совестью', 'published', v_author_id, 'Контрабандистка возит что угодно и не задаёт вопросов — таково правило её ремесла. Но однажды груз оказывается живым, и старое правило приходится нарушить.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '30ce014f-65dd-5fc3-a726-e4ea686983ff', 'sw-kontrabandistka-s-sovestyu', 'Контрабандистка с совестью', 'published', v_author_id,
         '2026-02-08T12:00:00+00:00', '2026-04-14T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('30ce014f-65dd-5fc3-a726-e4ea686983ff', '10000001-0001-4001-8001-000000000008');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('30ce014f-65dd-5fc3-a726-e4ea686983ff', '10000004-0004-4004-8004-000000000002');
@@ -5569,8 +5569,8 @@ BEGIN
 Зара завела двигатели «Звёздного шипа» и легла на новый курс — к тем самым людям, что помогали беженцам. Раз уж она нажила врагов, раз уж прежней жизни конец, — так пусть новая жизнь хоть чего-то стоит. В галактике было полно контейнеров с живым горем, которые везли неизвестно куда. И у Зары теперь был быстрый корабль, знание всех обходных путей и заново обретённая совесть. Она знала, на что их потратит. Правило «не задавай вопросов» она нарушила навсегда — и впервые ни о чём не жалела.', 'published', '2026-02-11T12:00:00+00:00', '2026-02-11T13:00:00+00:00');
 
     -- [37] Голос в эфире (star-wars)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '6f66ff04-033b-5a11-ab3d-ced2240e078f', 'sw-golos-v-efire', 'Голос в эфире', 'published', v_author_id, 'На захваченной планете девушка-радист тайно ведёт подпольную передачу, поддерживая надежду в тех, кто остался. Её знают по голосу миллионы — но не знает в лицо никто.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '6f66ff04-033b-5a11-ab3d-ced2240e078f', 'sw-golos-v-efire', 'Голос в эфире', 'published', v_author_id,
         '2026-02-06T12:00:00+00:00', '2026-04-13T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('6f66ff04-033b-5a11-ab3d-ced2240e078f', '10000001-0001-4001-8001-000000000008');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('6f66ff04-033b-5a11-ab3d-ced2240e078f', '10000004-0004-4004-8004-000000000002');
@@ -5681,8 +5681,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-02-08T12:00:00+00:00', '2026-02-08T13:00:00+00:00');
 
     -- [38] Мейстер замёрзшего замка (game-of-thrones)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'aa16c84b-2922-59b9-9f06-ebf1b45dbec9', 'got-meyster-zamyorzshego-zamka', 'Мейстер замёрзшего замка', 'published', v_author_id, 'В забытом замке на самом краю Севера старый мейстер ведёт хроники, которые никто не читает. Когда к нему приходит беда, выясняется, что знания дороже мечей.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'aa16c84b-2922-59b9-9f06-ebf1b45dbec9', 'got-meyster-zamyorzshego-zamka', 'Мейстер замёрзшего замка', 'published', v_author_id,
         '2026-02-04T12:00:00+00:00', '2026-04-12T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('aa16c84b-2922-59b9-9f06-ebf1b45dbec9', '10000001-0001-4001-8001-000000000009');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('aa16c84b-2922-59b9-9f06-ebf1b45dbec9', '10000004-0004-4004-8004-000000000002');
@@ -5816,8 +5816,8 @@ BEGIN
 — Не сильнее, — улыбнулся Виллем. — Просто бьёт дальше. Туда, куда мечу не дотянуться, — сквозь годы. Помни об этом, командир. И пусть твои внуки учатся грамоте. Однажды это спасёт им жизнь — как спасло нам.', 'published', '2026-02-07T12:00:00+00:00', '2026-02-07T13:00:00+00:00');
 
     -- [39] Песнь о малом доме (game-of-thrones)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '6520567b-76eb-51c5-a015-264d05e91680', 'got-pesn-o-malom-dome', 'Песнь о малом доме', 'published', v_author_id, 'Маленький дом, зажатый между двумя великими, должен выбрать, к кому примкнуть в надвигающейся войне. Юная наследница ищет третий путь — тот, что сохранит её людей.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '6520567b-76eb-51c5-a015-264d05e91680', 'got-pesn-o-malom-dome', 'Песнь о малом доме', 'published', v_author_id,
         '2026-02-02T12:00:00+00:00', '2026-04-11T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('6520567b-76eb-51c5-a015-264d05e91680', '10000001-0001-4001-8001-000000000009');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('6520567b-76eb-51c5-a015-264d05e91680', '10000004-0004-4004-8004-000000000002');
@@ -5951,8 +5951,8 @@ BEGIN
 Алисанна кивнула, глядя на тихие могилы под северным небом. Песнь о малом доме не споют менестрели — она слишком тиха для громких баллад о королях и битвах. Но те, кто выжил благодаря ей, передадут её детям и внукам. Песнь о доме, который посреди большой войны выбрал не славу, а своих людей, — и сберёг их. И эта тихая песнь, думала Алисанна, стоит всех громких.', 'published', '2026-02-05T12:00:00+00:00', '2026-02-05T13:00:00+00:00');
 
     -- [40] Та, что чинит знамёна (game-of-thrones)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '01542503-08b1-5da0-96b6-0da847b873ad', 'got-ta-chto-chinit-znamyona', 'Та, что чинит знамёна', 'published', v_author_id, 'Старая швея в замке латает знамёна, что возвращаются с битв изорванными. В каждой прорехе она читает чужую судьбу — и хранит память о тех, о ком забыли лорды.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '01542503-08b1-5da0-96b6-0da847b873ad', 'got-ta-chto-chinit-znamyona', 'Та, что чинит знамёна', 'published', v_author_id,
         '2026-01-31T12:00:00+00:00', '2026-04-10T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('01542503-08b1-5da0-96b6-0da847b873ad', '10000001-0001-4001-8001-000000000009');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('01542503-08b1-5da0-96b6-0da847b873ad', '10000004-0004-4004-8004-000000000002');
@@ -6043,8 +6043,8 @@ BEGIN
 — Вот закончу — и можно помирать спокойно, — говорила Мэг, склонившись над полотном. — Пусть после меня останется. Пусть люди смотрят и помнят: за каждым красивым стягом на стене стоял живой человек, который за него умер. Лорды считают победы. А кто-то должен считать людей. Раз уж больше некому — пусть будет это полотно. И вы, девочки. Я научу вас читать прорехи. Чтобы память не оборвалась, когда оборвётся моя нить.', 'published', '2026-02-02T12:00:00+00:00', '2026-02-02T13:00:00+00:00');
 
     -- [41] Ворон с дурной вестью (game-of-thrones)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '98497d26-de92-5f7b-803d-29dd83e4b141', 'got-voron-s-durnoy-vestyu', 'Ворон с дурной вестью', 'published', v_author_id, 'Юный смотритель воронов разрывается между долгом и совестью, когда через него проходит послание, способное развязать войну. Иногда судьба королевств зависит от того, кто держит письмо.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '98497d26-de92-5f7b-803d-29dd83e4b141', 'got-voron-s-durnoy-vestyu', 'Ворон с дурной вестью', 'published', v_author_id,
         '2026-01-29T12:00:00+00:00', '2026-04-09T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('98497d26-de92-5f7b-803d-29dd83e4b141', '10000001-0001-4001-8001-000000000009');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('98497d26-de92-5f7b-803d-29dd83e4b141', '10000004-0004-4004-8004-000000000002');
@@ -6155,8 +6155,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-01-31T12:00:00+00:00', '2026-01-31T13:00:00+00:00');
 
     -- [42] За стеной (attack-on-titan)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'd168325d-f530-5472-a664-50fb71388c8e', 'aot-za-stenoy', 'За стеной', 'published', v_author_id, 'Юная новобранка разведотряда впервые выходит за стену — туда, где человечество не было сто лет. Она боится титанов, но больше всего боится того, что страх сделает с ней самой.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'd168325d-f530-5472-a664-50fb71388c8e', 'aot-za-stenoy', 'За стеной', 'published', v_author_id,
         '2026-01-27T12:00:00+00:00', '2026-04-08T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('d168325d-f530-5472-a664-50fb71388c8e', '10000001-0001-4001-8001-00000000000a');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('d168325d-f530-5472-a664-50fb71388c8e', '10000004-0004-4004-8004-000000000002');
@@ -6311,8 +6311,8 @@ BEGIN
 Ветер с дальних равнин трепал её плащ, на котором были вышиты крылья — символ разведки, символ свободы. И Майя, восемнадцатилетняя девушка, когда-то застывшая от ужаса перед первым титаном, стояла на вершине покорённого холма и впервые за всю службу чувствовала не страх, а надежду. Огромную, как то море на краю мира.', 'published', '2026-01-30T12:00:00+00:00', '2026-01-30T13:00:00+00:00');
 
     -- [43] Гарнизон у ворот (attack-on-titan)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '37a04f98-2d8a-59c3-8fe2-a42ab45c66c3', 'aot-garnizon-u-vorot', 'Гарнизон у ворот', 'published', v_author_id, 'Солдат гарнизона никогда не хотел сражаться — он чинит стену, латает пушки и мечтает о тихой жизни. Но когда приходит беда, выясняется, что герои нужны не только на передовой.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '37a04f98-2d8a-59c3-8fe2-a42ab45c66c3', 'aot-garnizon-u-vorot', 'Гарнизон у ворот', 'published', v_author_id,
         '2026-01-25T12:00:00+00:00', '2026-04-07T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('37a04f98-2d8a-59c3-8fe2-a42ab45c66c3', '10000001-0001-4001-8001-00000000000a');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('37a04f98-2d8a-59c3-8fe2-a42ab45c66c3', '10000004-0004-4004-8004-000000000002');
@@ -6462,8 +6462,8 @@ BEGIN
 — Может, и зря, — улыбнулся Густав. — Да мне и не надо песен. Мне б мастерскую. Ладно, герой, бери мастерок. Стену вон в третьем секторе подлатать надо. Заодно покажу тебе, где у неё слабые места. Однажды это знание спасёт тебе жизнь. Или чью-то ещё.', 'published', '2026-01-28T12:00:00+00:00', '2026-01-28T13:00:00+00:00');
 
     -- [44] Картограф запретных земель (attack-on-titan)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'c13d275c-11c7-50fb-b7d5-63960bd9eacc', 'aot-kartograf-zapretnyh-zemel', 'Картограф запретных земель', 'published', v_author_id, 'Девушка-картограф мечтает нарисовать карту мира за стеной — мира, которого нет ни на одной карте. Каждая отвоёванная пядь земли на её пергаменте оплачена чьей-то жизнью.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'c13d275c-11c7-50fb-b7d5-63960bd9eacc', 'aot-kartograf-zapretnyh-zemel', 'Картограф запретных земель', 'published', v_author_id,
         '2026-01-23T12:00:00+00:00', '2026-04-06T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('c13d275c-11c7-50fb-b7d5-63960bd9eacc', '10000001-0001-4001-8001-00000000000a');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('c13d275c-11c7-50fb-b7d5-63960bd9eacc', '10000004-0004-4004-8004-000000000002');
@@ -6570,8 +6570,8 @@ BEGIN
 (продолжение следует)', 'published', '2026-01-25T12:00:00+00:00', '2026-01-25T13:00:00+00:00');
 
     -- [45] Последний рубеж (attack-on-titan)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '2d7b74fc-1f19-5e22-a3da-980cfbc197b8', 'aot-posledniy-rubezh', 'Последний рубеж', 'published', v_author_id, 'Старый ветеран, потерявший на войне всё, готовит молодых новобранцев. Он суров и нелюдим — но за этой бронёй прячется человек, отчаянно не желающий, чтобы дети повторяли его судьбу.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '2d7b74fc-1f19-5e22-a3da-980cfbc197b8', 'aot-posledniy-rubezh', 'Последний рубеж', 'published', v_author_id,
         '2026-01-21T12:00:00+00:00', '2026-04-05T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('2d7b74fc-1f19-5e22-a3da-980cfbc197b8', '10000001-0001-4001-8001-00000000000a');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('2d7b74fc-1f19-5e22-a3da-980cfbc197b8', '10000004-0004-4004-8004-000000000002');
@@ -6729,8 +6729,8 @@ BEGIN
 И когда какой-нибудь курсант, измученный, возмущался: «Да зачем, инструктор?!» — он отвечал то же, что когда-то ответили ему. А по ночам приходил к мемориалу, к имени Рейнгольда, и молча докладывал старому Сухарю, что цепочка не оборвалась. Что его наука живёт. Что дети, которых он учит, возвращаются из-за стены домой. Живыми. Как и хотел старик, отдавший всё, чтобы чужие дети не повторили его судьбу.', 'published', '2026-01-24T12:00:00+00:00', '2026-01-24T13:00:00+00:00');
 
     -- [46] Маяк на краю карты (originals)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'e0fc40b2-e2eb-5e5b-944a-1bfbc69a8b66', 'orig-mayak-na-krayu-karty', 'Маяк на краю карты', 'published', v_author_id, 'Старый смотритель маяка зажигает огонь для кораблей, которых уже почти не осталось. Когда к нему прибивает потерпевшего крушение, выясняется, ради кого на самом деле горит этот свет.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'e0fc40b2-e2eb-5e5b-944a-1bfbc69a8b66', 'orig-mayak-na-krayu-karty', 'Маяк на краю карты', 'published', v_author_id,
         '2026-01-19T12:00:00+00:00', '2026-04-04T12:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('e0fc40b2-e2eb-5e5b-944a-1bfbc69a8b66', '10000001-0001-4001-8001-00000000000b');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('e0fc40b2-e2eb-5e5b-944a-1bfbc69a8b66', '10000004-0004-4004-8004-000000000001');
@@ -6888,8 +6888,8 @@ BEGIN
 — Всегда, — пообещал моряк. И старик понял, что может уходить спокойно. Свет на краю карты будет гореть и дальше — в надёжных руках, во имя надёжного смысла.', 'published', '2026-01-22T12:00:00+00:00', '2026-01-22T13:00:00+00:00');
 
     -- [47] Часовщик, что чинил время (originals)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '14897072-933a-5eec-bedf-37fc82dc0547', 'orig-chasovshchik-chto-chinil-vremya', 'Часовщик, что чинил время', 'published', v_author_id, 'В лавке старого часовщика чинят не только часы, но и, по слухам, само время. Девочка приносит сломанные часы покойного деда — и узнаёт, что некоторые вещи нельзя починить, зато можно понять.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '14897072-933a-5eec-bedf-37fc82dc0547', 'orig-chasovshchik-chto-chinil-vremya', 'Часовщик, что чинил время', 'published', v_author_id,
         '2026-01-17T12:00:00+00:00', '2026-04-03T11:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('14897072-933a-5eec-bedf-37fc82dc0547', '10000001-0001-4001-8001-00000000000b');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('14897072-933a-5eec-bedf-37fc82dc0547', '10000004-0004-4004-8004-000000000001');
@@ -7043,8 +7043,8 @@ BEGIN
 А в тесной лавке, полной разноголосого тиканья, старый Корнелиус взялся за следующие часы — за следующее сломанное время, которое нужно было не вернуть назад, а научить идти вперёд. Такая уж у него была работа. Самая важная в мире, хоть о ней и ходили по городу лишь странные, недоверчивые слухи.', 'published', '2026-01-20T12:00:00+00:00', '2026-01-20T13:00:00+00:00');
 
     -- [48] Письма из ниоткуда (originals)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'ba992619-3850-56ea-a765-20c9e06edf70', 'orig-pisma-iz-niotkuda', 'Письма из ниоткуда', 'published', v_author_id, 'Почтальон маленького городка начинает получать письма без обратного адреса, адресованные людям, которые давно их ждали. Кто-то возвращает несказанные слова — но кто?',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'ba992619-3850-56ea-a765-20c9e06edf70', 'orig-pisma-iz-niotkuda', 'Письма из ниоткуда', 'published', v_author_id,
         '2026-01-15T12:00:00+00:00', '2026-04-02T10:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('ba992619-3850-56ea-a765-20c9e06edf70', '10000001-0001-4001-8001-00000000000b');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('ba992619-3850-56ea-a765-20c9e06edf70', '10000004-0004-4004-8004-000000000002');
@@ -7190,8 +7190,8 @@ BEGIN
 И каждое утро, беря в руки очередное застрявшее на десятилетия письмо, он думал об одном: где-то ждёт человек, для которого эти опоздавшие слова станут целым миром. Нужно только их донести. И Тобиас доносил.', 'published', '2026-01-18T12:00:00+00:00', '2026-01-18T13:00:00+00:00');
 
     -- [49] Хранительница последнего сада (originals)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        '4242d5bd-df8d-559d-87bf-5df8fb9097a8', 'orig-hranitelnica-poslednego-sada', 'Хранительница последнего сада', 'published', v_author_id, 'После того как мир оскудел и зелень почти исчезла, девушка хранит последний живой сад под стеклянным куполом. Она бережёт не растения — она бережёт надежду на то, что земля оживёт.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        '4242d5bd-df8d-559d-87bf-5df8fb9097a8', 'orig-hranitelnica-poslednego-sada', 'Хранительница последнего сада', 'published', v_author_id,
         '2026-01-13T12:00:00+00:00', '2026-04-01T09:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('4242d5bd-df8d-559d-87bf-5df8fb9097a8', '10000001-0001-4001-8001-00000000000b');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('4242d5bd-df8d-559d-87bf-5df8fb9097a8', '10000004-0004-4004-8004-000000000001');
@@ -7294,8 +7294,8 @@ BEGIN
 Ветер, тёплый и почти чистый, пробежал по молодой зелёной поросли, и Сольвейг показалось, что сама исцеляющаяся земля отвечает ей тихим, благодарным шелестом.', 'published', '2026-01-15T12:00:00+00:00', '2026-01-15T13:00:00+00:00');
 
     -- [50] Девочка и кит (originals)
-    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (
-        'd959a7be-fe3e-5c6e-bab0-5ff8cdc17151', 'orig-devochka-i-kit', 'Девочка и кит', 'published', v_author_id, 'В городе на сваях, посреди бесконечного океана, девочка дружит с огромным старым китом. Когда взрослые решают, что кит мешает, ей предстоит доказать, что не всё в мире измеряется пользой.',
+    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (
+        'd959a7be-fe3e-5c6e-bab0-5ff8cdc17151', 'orig-devochka-i-kit', 'Девочка и кит', 'published', v_author_id,
         '2026-01-11T12:00:00+00:00', '2026-03-31T08:00:00+00:00');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('d959a7be-fe3e-5c6e-bab0-5ff8cdc17151', '10000001-0001-4001-8001-00000000000b');
     INSERT INTO story_tags (story_id, tag_id) VALUES ('d959a7be-fe3e-5c6e-bab0-5ff8cdc17151', '10000004-0004-4004-8004-000000000001');

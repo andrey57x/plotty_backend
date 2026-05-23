@@ -140,8 +140,8 @@ def build():
         s_created = base - timedelta(days=2 * i + 30)
         s_updated = base - timedelta(days=i, hours=i % 5)
         up.append(f"    -- [{i+1}] {st['title']} ({st['fandom']})")
-        up.append("    INSERT INTO stories (id, slug, title, status, author_id, ai_summary, created_at, updated_at) VALUES (")
-        up.append(f"        '{story_id}', {sqlstr(st['slug'])}, {sqlstr(st['title'])}, 'published', v_author_id, {sqlstr(st['summary'])},")
+        up.append("    INSERT INTO stories (id, slug, title, status, author_id, created_at, updated_at) VALUES (")
+        up.append(f"        '{story_id}', {sqlstr(st['slug'])}, {sqlstr(st['title'])}, 'published', v_author_id,")
         up.append(f"        '{s_created.isoformat()}', '{s_updated.isoformat()}');")
         # теги
         for t in collect_tags(st):
