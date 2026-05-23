@@ -34,3 +34,7 @@ go.work.sum
 collect.sh
 forbidden.txt
 cookies.txt
+
+# Python
+__pycache__/
+*.pyc
