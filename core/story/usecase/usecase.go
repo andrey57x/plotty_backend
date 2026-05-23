@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	tagrepo "github.com/fivecode/plotty/core/tag/repository"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Usecase struct {
@@ -25,10 +27,11 @@ type Usecase struct {
 	tags     *tagrepo.Repository
 	chapters *chapterrepo.Repository
 	mlClient *ml.Client
+	rmqChan  *amqp.Channel
 }
 
-func New(stories *storyrepo.Repository, tags *tagrepo.Repository, chapters *chapterrepo.Repository, mlClient *ml.Client) *Usecase {
-	return &Usecase{stories: stories, tags: tags, chapters: chapters, mlClient: mlClient}
+func New(stories *storyrepo.Repository, tags *tagrepo.Repository, chapters *chapterrepo.Repository, mlClient *ml.Client, rmqChan *amqp.Channel) *Usecase {
+	return &Usecase{stories: stories, tags: tags, chapters: chapters, mlClient: mlClient, rmqChan: rmqChan}
 }
 
 func dedupeUUIDs(ids []uuid.UUID) []uuid.UUID {
@@ -488,7 +491,7 @@ func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 	logger.Ctx(ctx).Info().Stringer("story_id", id).Msg("story_uc: deleted")
 
-	_ = rabbitmq.MLTaskMessage{
+	task := rabbitmq.MLTaskMessage{
 		TaskID:  uuid.NewString(),
 		TraceID: uuid.NewString(),
 		Type:    "delete_story_lore",
@@ -496,8 +499,11 @@ func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
 			"story_id": id.String(),
 		},
 	}
-
-	// TODO: delete chapters
+	body, _ := json.Marshal(task)
+	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
 
 	return nil
 }

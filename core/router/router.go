@@ -66,7 +66,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	fandomu := fandomuc.New(fandomr, tr, authr, rmqChan)
 	mlClient := ml.NewClient(cfg.MLBaseURL)
 
-	su := storyuc.New(sr, tr, cr, mlClient)
+	su := storyuc.New(sr, tr, cr, mlClient, rmqChan)
 	cu := chuc.New(cr, sr, rmqChan, mlClient)
 	cu.SetAuthorChecker(su)
 
