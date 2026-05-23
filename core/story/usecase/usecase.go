@@ -120,6 +120,11 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 		return nil, 0, fmt.Errorf("story_uc.List authors: %w", err)
 	}
 	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
+	var uid *uint64
+	if id, ok := middleware.GetUserID(ctx); ok {
+		uid = &id
+	}
+	readNums, _ := u.stories.ReadChapterNumbers(ctx, ids, uid)
 
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
@@ -128,11 +133,12 @@ func (u *Usecase) List(ctx context.Context, q string, tagSlugs []string, page, p
 			continue
 		}
 		item := models.StoryListItem{
-			Story:         s,
-			Tags:          tagsMap[id],
-			ChaptersCount: counts[id],
-			LikesCount:    likes[id],
-			Author:        authors[id],
+			Story:             s,
+			Tags:              tagsMap[id],
+			ChaptersCount:     counts[id],
+			LikesCount:        likes[id],
+			Author:            authors[id],
+			ReadChapterNumber: readNums[id],
 		}
 		if url := covers[id]; url != "" {
 			item.CoverURL = &url
@@ -204,6 +210,7 @@ func (u *Usecase) ListMy(ctx context.Context, q string, tagSlugs []string, page,
 		return nil, 0, fmt.Errorf("story_uc.ListMy authors: %w", err)
 	}
 	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
+	readNums, _ := u.stories.ReadChapterNumbers(ctx, ids, &userID)
 
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
@@ -212,11 +219,12 @@ func (u *Usecase) ListMy(ctx context.Context, q string, tagSlugs []string, page,
 			continue
 		}
 		item := models.StoryListItem{
-			Story:         s,
-			Tags:          tagsMap[id],
-			ChaptersCount: counts[id],
-			LikesCount:    likes[id],
-			Author:        authors[id],
+			Story:             s,
+			Tags:              tagsMap[id],
+			ChaptersCount:     counts[id],
+			LikesCount:        likes[id],
+			Author:            authors[id],
+			ReadChapterNumber: readNums[id],
 		}
 		if url := covers[id]; url != "" {
 			item.CoverURL = &url
@@ -277,6 +285,11 @@ func (u *Usecase) ListPublishedByAuthor(ctx context.Context, authorID uint64, q 
 		return nil, 0, fmt.Errorf("story_uc.ListPublishedByAuthor authors: %w", err)
 	}
 	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
+	var uid *uint64
+	if id, ok := middleware.GetUserID(ctx); ok {
+		uid = &id
+	}
+	readNums, _ := u.stories.ReadChapterNumbers(ctx, ids, uid)
 
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
@@ -285,11 +298,12 @@ func (u *Usecase) ListPublishedByAuthor(ctx context.Context, authorID uint64, q 
 			continue
 		}
 		item := models.StoryListItem{
-			Story:         s,
-			Tags:          tagsMap[id],
-			ChaptersCount: counts[id],
-			LikesCount:    likes[id],
-			Author:        authors[id],
+			Story:             s,
+			Tags:              tagsMap[id],
+			ChaptersCount:     counts[id],
+			LikesCount:        likes[id],
+			Author:            authors[id],
+			ReadChapterNumber: readNums[id],
 		}
 		if url := covers[id]; url != "" {
 			item.CoverURL = &url
@@ -510,6 +524,11 @@ func (u *Usecase) GetSimilar(ctx context.Context, storyID uuid.UUID) ([]models.S
 	likes, _ := u.stories.LikeCounts(ctx, ids)
 	authors, _ := u.stories.AuthorsForStories(ctx, ids)
 	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
+	var uid *uint64
+	if id, ok := middleware.GetUserID(ctx); ok {
+		uid = &id
+	}
+	readNums, _ := u.stories.ReadChapterNumbers(ctx, ids, uid)
 
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
@@ -518,11 +537,12 @@ func (u *Usecase) GetSimilar(ctx context.Context, storyID uuid.UUID) ([]models.S
 			continue
 		}
 		item := models.StoryListItem{
-			Story:         s,
-			Tags:          tagsMap[id],
-			ChaptersCount: counts[id],
-			LikesCount:    likes[id],
-			Author:        authors[id],
+			Story:             s,
+			Tags:              tagsMap[id],
+			ChaptersCount:     counts[id],
+			LikesCount:        likes[id],
+			Author:            authors[id],
+			ReadChapterNumber: readNums[id],
 		}
 		if url := covers[id]; url != "" {
 			item.CoverURL = &url

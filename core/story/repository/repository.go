@@ -720,6 +720,49 @@ func (r *Repository) FirstChapterCoverURLs(ctx context.Context, storyIDs []uuid.
 	return out, rows.Err()
 }
 
+func (r *Repository) ReadChapterNumbers(ctx context.Context, storyIDs []uuid.UUID, userID *uint64) (map[uuid.UUID]*int, error) {
+	out := make(map[uuid.UUID]*int)
+	if len(storyIDs) == 0 {
+		return out, nil
+	}
+	var uid any
+	if userID != nil {
+		uid = int64(*userID)
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			story_id,
+			COALESCE(
+				MIN(CASE WHEN cv.chapter_id IS NULL THEN chapter_num END),
+				1
+			) AS read_chapter_number
+		FROM (
+			SELECT
+				c.story_id,
+				c.id AS chapter_id,
+				ROW_NUMBER() OVER (PARTITION BY c.story_id ORDER BY c.created_at ASC, c.id ASC) AS chapter_num
+			FROM chapters c
+			WHERE c.story_id = ANY($1) AND c.status = 'published'
+		) sub
+		LEFT JOIN chapter_views cv ON cv.chapter_id = sub.chapter_id AND cv.user_id = $2
+		GROUP BY story_id
+	`, storyIDs, uid)
+	if err != nil {
+		return nil, fmt.Errorf("story_repo.ReadChapterNumbers: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid uuid.UUID
+		var num int
+		if err := rows.Scan(&sid, &num); err != nil {
+			return nil, fmt.Errorf("story_repo.ReadChapterNumbers scan: %w", err)
+		}
+		n := num
+		out[sid] = &n
+	}
+	return out, rows.Err()
+}
+
 func (r *Repository) Publish(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `UPDATE stories SET status = 'published', updated_at = $2 WHERE id = $1 AND status = 'draft'`, id, time.Now().UTC())
 	if err != nil {

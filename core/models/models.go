@@ -32,11 +32,12 @@ type StoryAuthor struct {
 
 type StoryListItem struct {
 	Story
-	Tags          []Tag        `json:"tags"`
-	ChaptersCount int          `json:"chaptersCount"`
-	LikesCount    int          `json:"likesCount"`
-	Author        *StoryAuthor `json:"author,omitempty"`
-	CoverURL      *string      `json:"coverUrl,omitempty"`
+	Tags                []Tag        `json:"tags"`
+	ChaptersCount       int          `json:"chaptersCount"`
+	LikesCount          int          `json:"likesCount"`
+	Author              *StoryAuthor `json:"author,omitempty"`
+	CoverURL            *string      `json:"coverUrl,omitempty"`
+	ReadChapterNumber   *int         `json:"readChapterNumber"`
 }
 
 type StoryDetail struct {

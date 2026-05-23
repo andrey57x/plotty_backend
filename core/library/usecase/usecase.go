@@ -138,6 +138,11 @@ func (u *Usecase) buildListItems(ctx context.Context, ids []uuid.UUID, published
 		return nil, err
 	}
 	covers, _ := u.stories.FirstChapterCoverURLs(ctx, ids)
+	var uid *uint64
+	if id, ok := middleware.GetUserID(ctx); ok {
+		uid = &id
+	}
+	readNums, _ := u.stories.ReadChapterNumbers(ctx, ids, uid)
 	items := make([]models.StoryListItem, 0, len(ids))
 	for _, id := range ids {
 		s, ok := byID[id]
@@ -145,11 +150,12 @@ func (u *Usecase) buildListItems(ctx context.Context, ids []uuid.UUID, published
 			continue
 		}
 		item := models.StoryListItem{
-			Story:         s,
-			Tags:          tagsMap[id],
-			ChaptersCount: counts[id],
-			LikesCount:    likes[id],
-			Author:        authors[id],
+			Story:             s,
+			Tags:              tagsMap[id],
+			ChaptersCount:     counts[id],
+			LikesCount:        likes[id],
+			Author:            authors[id],
+			ReadChapterNumber: readNums[id],
 		}
 		if url := covers[id]; url != "" {
 			item.CoverURL = &url

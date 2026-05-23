@@ -93,6 +93,8 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  expiration,
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, session)
 
@@ -150,6 +152,8 @@ func (d *AuthDelivery) Register(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  expiration,
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, session)
 
@@ -185,8 +189,15 @@ func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session.Expires = time.Now().Add(-1 * time.Hour)
-	http.SetCookie(w, session)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	log.Info().Msg("user logged out successfully")
 	utilities.WriteJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
