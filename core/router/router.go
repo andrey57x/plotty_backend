@@ -157,6 +157,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, redisDB *redis.RedisDB, r
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/discard-draft", cd.DiscardDraft).Methods(http.MethodPost)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/canon-check", ad.CanonCheck).Methods(http.MethodPost)
 	protected.HandleFunc("/chapters/{id:"+uuidRe+"}/comments", comd.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/comments/{commentId:"+uuidRe+"}", comd.Update).Methods(http.MethodPatch)
 	protected.HandleFunc("/comments/{commentId:"+uuidRe+"}", comd.Delete).Methods(http.MethodDelete)
 
 	protected.HandleFunc("/ai/spellcheck", ad.Spellcheck).Methods(http.MethodPost)

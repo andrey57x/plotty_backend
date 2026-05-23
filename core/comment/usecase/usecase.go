@@ -66,6 +66,37 @@ func (u *Usecase) List(ctx context.Context, chapterID uuid.UUID, page, pageSize 
 	return comments, total, nil
 }
 
+func (u *Usecase) Update(ctx context.Context, commentID uuid.UUID, content string) (*models.Comment, error) {
+	log := logger.FromContext(ctx)
+
+	userID, ok := middleware.GetUserID(ctx)
+	if !ok {
+		return nil, named_errors.ErrNoAccess
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil, named_errors.ErrInvalidInput
+	}
+	if len(content) > 5000 {
+		return nil, named_errors.ErrInvalidInput
+	}
+	ownerID, err := u.comments.GetOwnerID(ctx, commentID)
+	if err != nil {
+		log.Warn().Err(err).Stringer("comment_id", commentID).Msg("comment_uc: get owner for update failed")
+		return nil, named_errors.ErrNotFound
+	}
+	if ownerID != userID {
+		log.Warn().Uint64("user_id", userID).Uint64("owner_id", ownerID).Stringer("comment_id", commentID).Msg("comment_uc: update denied, not owner")
+		return nil, named_errors.ErrNoAccess
+	}
+	c, err := u.comments.Update(ctx, commentID, content)
+	if err != nil {
+		return nil, fmt.Errorf("comment_uc.Update: %w", err)
+	}
+	log.Info().Stringer("comment_id", commentID).Uint64("user_id", userID).Msg("comment_uc: updated")
+	return c, nil
+}
+
 func (u *Usecase) Delete(ctx context.Context, commentID uuid.UUID) error {
 	log := logger.FromContext(ctx)
 

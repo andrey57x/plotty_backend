@@ -35,11 +35,11 @@ func (r *Repository) Create(ctx context.Context, chapterID uuid.UUID, userID uin
 
 	var c models.Comment
 	err = r.pool.QueryRow(ctx, `
-		SELECT cc.id, cc.chapter_id, cc.user_id, u.username, u.avatar_url, cc.content, cc.created_at
+		SELECT cc.id, cc.chapter_id, cc.user_id, u.username, u.avatar_url, cc.content, cc.created_at, cc.updated_at
 		FROM chapter_comments cc
 		JOIN users u ON u.id = cc.user_id
 		WHERE cc.id = $1
-	`, id).Scan(&c.ID, &c.ChapterID, &c.UserID, &c.Username, &c.AvatarURL, &c.Content, &c.CreatedAt)
+	`, id).Scan(&c.ID, &c.ChapterID, &c.UserID, &c.Username, &c.AvatarURL, &c.Content, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		log.Error().Err(err).Stringer("comment_id", id).Msg("comment_repo: select after insert failed")
 		return nil, fmt.Errorf("comment_repo.Create select: %w", err)
@@ -59,7 +59,7 @@ func (r *Repository) ListByChapter(ctx context.Context, chapterID uuid.UUID, lim
 	}
 
 	rows, err := r.pool.Query(ctx, `
-		SELECT cc.id, cc.chapter_id, cc.user_id, u.username, u.avatar_url, cc.content, cc.created_at
+		SELECT cc.id, cc.chapter_id, cc.user_id, u.username, u.avatar_url, cc.content, cc.created_at, cc.updated_at
 		FROM chapter_comments cc
 		JOIN users u ON u.id = cc.user_id
 		WHERE cc.chapter_id = $1
@@ -74,7 +74,7 @@ func (r *Repository) ListByChapter(ctx context.Context, chapterID uuid.UUID, lim
 	var comments []models.Comment
 	for rows.Next() {
 		var c models.Comment
-		if err := rows.Scan(&c.ID, &c.ChapterID, &c.UserID, &c.Username, &c.AvatarURL, &c.Content, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.ChapterID, &c.UserID, &c.Username, &c.AvatarURL, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("comment_repo.ListByChapter scan: %w", err)
 		}
 		comments = append(comments, c)
@@ -93,6 +93,30 @@ func (r *Repository) Delete(ctx context.Context, commentID uuid.UUID) error {
 	}
 	logger.Ctx(ctx).Info().Stringer("comment_id", commentID).Msg("comment_repo: deleted")
 	return nil
+}
+
+func (r *Repository) Update(ctx context.Context, commentID uuid.UUID, content string) (*models.Comment, error) {
+	now := time.Now().UTC()
+	_, err := r.pool.Exec(ctx, `
+		UPDATE chapter_comments SET content = $1, updated_at = $2 WHERE id = $3
+	`, content, now, commentID)
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Stringer("comment_id", commentID).Msg("comment_repo: update failed")
+		return nil, fmt.Errorf("comment_repo.Update exec: %w", err)
+	}
+
+	var c models.Comment
+	err = r.pool.QueryRow(ctx, `
+		SELECT cc.id, cc.chapter_id, cc.user_id, u.username, u.avatar_url, cc.content, cc.created_at, cc.updated_at
+		FROM chapter_comments cc
+		JOIN users u ON u.id = cc.user_id
+		WHERE cc.id = $1
+	`, commentID).Scan(&c.ID, &c.ChapterID, &c.UserID, &c.Username, &c.AvatarURL, &c.Content, &c.CreatedAt, &c.UpdatedAt)
+	if err != nil {
+		logger.Ctx(ctx).Error().Err(err).Stringer("comment_id", commentID).Msg("comment_repo: select after update failed")
+		return nil, fmt.Errorf("comment_repo.Update select: %w", err)
+	}
+	return &c, nil
 }
 
 func (r *Repository) GetOwnerID(ctx context.Context, commentID uuid.UUID) (uint64, error) {

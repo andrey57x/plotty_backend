@@ -79,6 +79,30 @@ func (d *Delivery) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (d *Delivery) Update(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	commentID, err := uuid.Parse(mux.Vars(r)["commentId"])
+	if err != nil {
+		utilities.WriteError(w, http.StatusBadRequest, "invalid comment id")
+		return
+	}
+	var body createCommentBody
+	if err := utilities.DecodeJSON(r, &body); err != nil {
+		log.Warn().Err(err).Stringer("comment_id", commentID).Msg("comment_delivery: update invalid json")
+		utilities.WriteError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	comment, err := d.uc.Update(r.Context(), commentID, body.Content)
+	if err != nil {
+		log.Warn().Err(err).Stringer("comment_id", commentID).Msg("comment_delivery: update failed")
+		utilities.WriteError(w, utilities.StatusFromErr(err), err.Error())
+		return
+	}
+	log.Info().Stringer("comment_id", commentID).Msg("comment_delivery: updated")
+	utilities.WriteJSON(w, http.StatusOK, comment)
+}
+
 func (d *Delivery) Delete(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 

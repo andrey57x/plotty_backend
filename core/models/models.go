@@ -50,13 +50,14 @@ type StoryDetail struct {
 }
 
 type Comment struct {
-	ID        uuid.UUID `json:"id"`
-	ChapterID uuid.UUID `json:"chapterId"`
-	UserID    uint64    `json:"userId"`
-	Username  string    `json:"username"`
-	AvatarURL *string   `json:"avatarUrl,omitempty"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        uuid.UUID  `json:"id"`
+	ChapterID uuid.UUID  `json:"chapterId"`
+	UserID    uint64     `json:"userId"`
+	Username  string     `json:"username"`
+	AvatarURL *string    `json:"avatarUrl,omitempty"`
+	Content   string     `json:"content"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt *time.Time `json:"updatedAt"`
 }
 
 type ChapterBrief struct {
