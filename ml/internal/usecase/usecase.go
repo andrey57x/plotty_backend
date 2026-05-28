@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/fivecode/plotty/internal/infrastructure/gigachat"
 	sharedrmq "github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
@@ -16,6 +17,7 @@ import (
 	"github.com/fivecode/plotty/ml/internal/repository"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
 )
 
 type Spellchecker interface {
@@ -161,7 +163,17 @@ const imagePromptEnhancer = `На основе текста главы и пож
 
 func (u *AIUsecase) processImageGen(ctx context.Context, task sharedrmq.MLTaskMessage) error {
 	taskID, _ := uuid.Parse(task.TaskID)
+	log.Info().
+		Str("trace_id", task.TraceID).
+		Str("task_id", task.TaskID).
+		Msg("Начало обработки генерации изображения")
+
 	if err := u.repo.CreateTask(ctx, taskID, "image_gen", task.Payload); err != nil {
+		log.Error().
+			Err(err).
+			Str("trace_id", task.TraceID).
+			Str("task_id", task.TaskID).
+			Msg("Ошибка создания задачи в базе")
 		return err
 	}
 
@@ -169,29 +181,122 @@ func (u *AIUsecase) processImageGen(ctx context.Context, task sharedrmq.MLTaskMe
 		Content string `json:"content"`
 		Prompt  string `json:"prompt"`
 	}
-	_ = json.Unmarshal([]byte(task.Payload), &input)
+	if err := json.Unmarshal([]byte(task.Payload), &input); err != nil {
+		log.Error().
+			Err(err).
+			Str("trace_id", task.TraceID).
+			Str("task_id", task.TaskID).
+			Msg("Ошибка десериализации payload")
+		return u.publishResult(ctx, task, "failed", nil, "invalid payload format")
+	}
 
 	promptInput := fmt.Sprintf("Текст: %s\nПожелание: %s", input.Content, input.Prompt)
+	log.Info().
+		Str("trace_id", task.TraceID).
+		Str("task_id", task.TaskID).
+		Msg("Шаг 1: Улучшение промпта через GigaChat...")
+
 	enhancedPrompt, err := u.llm.SendChat(gigachat.ModelGigaChat, imagePromptEnhancer, promptInput)
 	if err != nil {
-		return u.publishResult(ctx, task, "failed", nil, err.Error())
+		log.Error().
+			Err(err).
+			Str("trace_id", task.TraceID).
+			Str("task_id", task.TaskID).
+			Msg("Ошибка улучшения промпта")
+		return u.publishResult(ctx, task, "failed", nil, fmt.Sprintf("prompt enhancement failed: %v", err))
 	}
 
-	fileID, err := u.llm.GenerateImage(enhancedPrompt)
-	if err != nil {
-		return u.publishResult(ctx, task, "failed", nil, "image gen failed")
+	log.Info().
+		Str("trace_id", task.TraceID).
+		Str("task_id", task.TaskID).
+		Str("enhanced_prompt", enhancedPrompt).
+		Msg("Промпт улучшен")
+
+	var fileID string
+	var imgData []byte
+	const maxAttempts = 3
+	var attemptErr error
+
+	// Цикл ретраев для генерации и скачивания картинки (Шаги 2 и 3)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		log.Info().
+			Str("trace_id", task.TraceID).
+			Str("task_id", task.TaskID).
+			Int("attempt", attempt).
+			Int("max_attempts", maxAttempts).
+			Msg("Попытка генерации изображения")
+
+		fileID, attemptErr = u.llm.GenerateImage(enhancedPrompt)
+		if attemptErr != nil {
+			log.Error().
+				Err(attemptErr).
+				Str("trace_id", task.TraceID).
+				Str("task_id", task.TaskID).
+				Int("attempt", attempt).
+				Msg("Ошибка генерации изображения на попытке")
+			if attempt < maxAttempts {
+				time.Sleep(2 * time.Second)
+			}
+			continue
+		}
+
+		log.Info().
+			Str("trace_id", task.TraceID).
+			Str("task_id", task.TaskID).
+			Int("attempt", attempt).
+			Str("file_id", fileID).
+			Msg("Изображение сгенерировано, скачивание...")
+
+		imgData, attemptErr = u.llm.DownloadFile(fileID)
+		if attemptErr != nil {
+			log.Error().
+				Err(attemptErr).
+				Str("trace_id", task.TraceID).
+				Str("task_id", task.TaskID).
+				Int("attempt", attempt).
+				Msg("Ошибка скачивания файла на попытке")
+			if attempt < maxAttempts {
+				time.Sleep(2 * time.Second)
+			}
+			continue
+		}
+
+		// Если дошли сюда, генерация и скачивание успешны!
+		attemptErr = nil
+		break
 	}
 
-	imgData, err := u.llm.DownloadFile(fileID)
-	if err != nil {
-		return u.publishResult(ctx, task, "failed", nil, "download failed")
+	if attemptErr != nil {
+		log.Error().
+			Err(attemptErr).
+			Str("trace_id", task.TraceID).
+			Str("task_id", task.TaskID).
+			Int("max_attempts", maxAttempts).
+			Msg("Все попытки генерации провалились")
+		return u.publishResult(ctx, task, "failed", nil, fmt.Sprintf("image generation failed after %d attempts: %v", maxAttempts, attemptErr))
 	}
+
+	log.Info().
+		Str("trace_id", task.TraceID).
+		Str("task_id", task.TaskID).
+		Msg("Шаг 4: Загрузка изображения в S3 (MinIO)...")
 
 	fileName := fmt.Sprintf("%s.jpg", taskID.String())
 	fileURL, err := u.storage.Upload(ctx, fileName, bytes.NewReader(imgData), int64(len(imgData)), "image/jpeg")
 	if err != nil {
-		return u.publishResult(ctx, task, "failed", nil, "minio upload failed")
+		log.Error().
+			Err(err).
+			Str("trace_id", task.TraceID).
+			Str("task_id", task.TaskID).
+			Msg("Ошибка загрузки в MinIO")
+		return u.publishResult(ctx, task, "failed", nil, fmt.Sprintf("minio upload failed: %v", err))
 	}
+
+	log.Info().
+		Str("trace_id", task.TraceID).
+		Str("task_id", task.TaskID).
+		Str("file_url", fileURL).
+		Msg("Изображение успешно сгенерировано и загружено")
 
 	return u.publishResult(ctx, task, "completed", models.ImageResult{URL: fileURL, Prompt: enhancedPrompt}, "")
 }
@@ -466,7 +571,7 @@ func (u *AIUsecase) processGenerateFandomLore(ctx context.Context, task sharedrm
 
 	// 2. Очищаем ответ от возможного мусора (маркдауна)
 	cleanJSONStr := cleanJSON(llmResponse)
-	
+
 	var rawFacts []map[string]string
 	if err := json.Unmarshal([]byte(cleanJSONStr), &rawFacts); err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "invalid json from llm: "+err.Error())

@@ -18,11 +18,13 @@ import (
 var imgTagRegex = regexp.MustCompile(`<img src="([^"]+)"`)
 
 type Client struct {
-	authKey    string
-	token      string
-	expiresAt  time.Time
-	httpClient *http.Client
-	mu         sync.Mutex
+	authKey     string
+	token       string
+	expiresAt   time.Time
+	httpClient  *http.Client // Для текстовых запросов (120 секунд)
+	imageClient *http.Client // Для быстрой генерации изображений (20 секунд)
+	mu          sync.Mutex   // Для обновления токена
+	apiMu       sync.Mutex   // Для сериализации всех API запросов (лимит 1 поток у физлиц!)
 }
 
 type tokenResponse struct {
@@ -38,7 +40,11 @@ func NewClient(authKey string) *Client {
 		authKey: authKey,
 		httpClient: &http.Client{
 			Transport: customTransport,
-			Timeout:   120 * time.Second, // Увеличиваем таймаут для генерации изображений
+			Timeout:   standartTimeout * time.Second, // Оставляем стандартный таймаут для текста
+		},
+		imageClient: &http.Client{
+			Transport: customTransport,
+			Timeout:   imageTimeout * time.Second, // Ограничиваем таймаут для картинок до 20 секунд
 		},
 	}
 }
@@ -85,6 +91,9 @@ func (c *Client) ensureToken() error {
 
 // SendChat отправляет текстовый запрос с указанием конкретной модели
 func (c *Client) SendChat(modelName, systemPrompt, userText string) (string, error) {
+	c.apiMu.Lock()
+	defer c.apiMu.Unlock()
+
 	if err := c.ensureToken(); err != nil {
 		return "", err
 	}
@@ -103,6 +112,9 @@ func (c *Client) SendChat(modelName, systemPrompt, userText string) (string, err
 
 // GenerateImage отправляет запрос на генерацию изображения и возвращает file_id
 func (c *Client) GenerateImage(prompt string) (string, error) {
+	c.apiMu.Lock()
+	defer c.apiMu.Unlock()
+
 	if err := c.ensureToken(); err != nil {
 		return "", err
 	}
@@ -116,7 +128,7 @@ func (c *Client) GenerateImage(prompt string) (string, error) {
 		FunctionCall: "auto", // ТА САМАЯ НАСТРОЙКА ИЗ ДОКУМЕНТАЦИИ
 	}
 
-	content, err := c.doChatRequest(reqBody)
+	content, err := c.doImageChatRequest(reqBody)
 	if err != nil {
 		return "", err
 	}
@@ -132,6 +144,9 @@ func (c *Client) GenerateImage(prompt string) (string, error) {
 
 // DownloadFile скачивает байты файла по его ID
 func (c *Client) DownloadFile(fileID string) ([]byte, error) {
+	c.apiMu.Lock()
+	defer c.apiMu.Unlock()
+
 	if err := c.ensureToken(); err != nil {
 		return nil, err
 	}
@@ -144,7 +159,7 @@ func (c *Client) DownloadFile(fileID string) ([]byte, error) {
 
 	req.Header.Add("Authorization", "Bearer "+c.token)
 
-	res, err := c.httpClient.Do(req)
+	res, err := c.imageClient.Do(req) // Используем imageClient
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +188,38 @@ func (c *Client) doChatRequest(reqBody ChatRequest) (string, error) {
 	req.Header.Add("Authorization", "Bearer "+c.token)
 
 	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	var chatResp ChatResponse
+	if err := json.NewDecoder(res.Body).Decode(&chatResp); err != nil {
+		return "", err
+	}
+
+	if len(chatResp.Choices) == 0 {
+		return "", fmt.Errorf("empty choices from gigachat")
+	}
+
+	return chatResp.Choices[0].Message.Content, nil
+}
+
+func (c *Client) doImageChatRequest(reqBody ChatRequest) (string, error) {
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", chatURL, strings.NewReader(string(jsonData)))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer "+c.token)
+
+	res, err := c.imageClient.Do(req) // Используем imageClient для картинок
 	if err != nil {
 		return "", err
 	}

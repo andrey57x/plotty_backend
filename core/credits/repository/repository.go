@@ -55,6 +55,33 @@ func (r *Repository) DeductCredits(ctx context.Context, userID uint64, amount in
 	return tx.Commit(ctx)
 }
 
+func (r *Repository) RefundCredits(ctx context.Context, userID uint64, amount int, jobType string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx,
+		`UPDATE users SET ai_credits = ai_credits + $2 WHERE id = $1`,
+		userID, amount,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx,
+		`INSERT INTO credit_transactions (id, user_id, amount, type, description, status)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		uuid.New(), userID, amount, "refund", "Возврат AI: "+jobType, constants.CreditTxStatusCompleted,
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r *Repository) AddCredits(ctx context.Context, userID uint64, amount int, paymentLabel string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

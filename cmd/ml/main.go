@@ -2,41 +2,44 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/internal/infrastructure/postgres"
 	"github.com/fivecode/plotty/internal/infrastructure/rabbitmq"
 	"github.com/fivecode/plotty/ml/app"
 	"github.com/fivecode/plotty/ml/config"
+	"github.com/rs/zerolog/log"
 )
 
 func main() {
+	logger.Init() // Инициализация логгера zerolog
+
 	ctx := context.Background()
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Ошибка загрузки конфига: %v", err)
+		log.Fatal().Err(err).Msg("Ошибка загрузки конфига")
 	}
 
 	if err := postgres.RunMigrations(cfg.GetDSN(), "migrations/ml"); err != nil {
-		log.Fatalf("migrations error: %v", err)
+		log.Fatal().Err(err).Msg("Ошибка миграций")
 	}
 
 	rmqConn, err := rabbitmq.NewConnection(cfg.RabbitMQURL)
 	if err != nil {
-		log.Fatalf("Ошибка подключения к RabbitMQ: %v", err)
+		log.Fatal().Err(err).Msg("Ошибка подключения к RabbitMQ")
 	}
 
 	dbPool, err := postgres.NewPostgresPool(ctx, cfg.GetDSN())
 	if err != nil {
-		log.Fatalf("Ошибка БД: %v", err)
+		log.Fatal().Err(err).Msg("Ошибка БД")
 	}
 
 	application, err := app.NewApp(cfg, rmqConn, dbPool)
 	if err != nil {
-		log.Fatalf("Ошибка инициализации ML приложения: %v", err)
+		log.Fatal().Err(err).Msg("Ошибка инициализации ML приложения")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -44,7 +47,7 @@ func main() {
 
 	go func() {
 		if err := application.Run(ctx); err != nil {
-			log.Printf("Остановка воркера: %v", err)
+			log.Info().Err(err).Msg("Остановка воркера")
 		}
 	}()
 
@@ -52,10 +55,10 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Получен сигнал завершения. Выключаем ML Worker...")
+	log.Info().Msg("Получен сигнал завершения. Выключаем ML Worker...")
 
 	cancel()
 	application.Stop()
 
-	log.Println("ML Worker успешно остановлен.")
+	log.Info().Msg("ML Worker успешно остановлен.")
 }

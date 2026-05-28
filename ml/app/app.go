@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"log"
 	"net/http"
 
 	"github.com/fivecode/plotty/internal/infrastructure/gigachat"
@@ -17,6 +16,7 @@ import (
 	"github.com/fivecode/plotty/ml/internal/usecase"
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
 )
 
 type App struct {
@@ -84,6 +84,7 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 }
 
 func (a *App) Run(ctx context.Context) error {
+	// 1. Слушаем проверки правописания
 	err1 := a.consumer.StartWorker(ctx, "spellcheck_queue", rabbitmq.LoggingMiddleware(func(c context.Context, task sharedrmq.MLTaskMessage) error {
 		return a.usecase.ProcessSpellcheck(c, task)
 	}))
@@ -91,28 +92,35 @@ func (a *App) Run(ctx context.Context) error {
 		return err1
 	}
 
+	// 2. Слушаем быстрые задачи
 	err2 := a.consumer.StartWorker(ctx, "ml_tasks_queue", rabbitmq.LoggingMiddleware(a.usecase.ProcessMLTask))
 	if err2 != nil {
 		return err2
 	}
 
+	// 3. Слушаем медленные задачи картинок
+	err3 := a.consumer.StartWorker(ctx, "ml_image_queue", rabbitmq.LoggingMiddleware(a.usecase.ProcessMLTask))
+	if err3 != nil {
+		return err3
+	}
+
 	go func() {
-		log.Printf("ML Worker: Внутренний HTTP сервер запущен на порту %s", a.cfg.HTTPPort)
+		log.Info().Str("port", a.cfg.HTTPPort).Msg("ML Worker: Внутренний HTTP сервер запущен")
 		if err := a.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Ошибка HTTP сервера ML: %v", err)
+			log.Fatal().Err(err).Msg("Ошибка HTTP сервера ML")
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("ML Worker: Контекст отменен, завершение работы...")
+	log.Info().Msg("ML Worker: Контекст отменен, завершение работы...")
 	return ctx.Err()
 }
 
 func (a *App) Stop() {
-	log.Println("ML Worker: Очистка ресурсов...")
+	log.Info().Msg("ML Worker: Очистка ресурсов...")
 
 	if a.httpServer != nil {
-		a.httpServer.Shutdown(context.Background())
+		_ = a.httpServer.Shutdown(context.Background())
 	}
 
 	if a.consumer != nil {
@@ -127,5 +135,5 @@ func (a *App) Stop() {
 	if a.dbPool != nil {
 		a.dbPool.Close()
 	}
-	log.Println("ML Worker: Ресурсы очищены.")
+	log.Info().Msg("ML Worker: Ресурсы очищены.")
 }

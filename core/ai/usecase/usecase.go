@@ -21,8 +21,9 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type CreditsDeductor interface {
+type CreditsHandler interface {
 	DeductCredits(ctx context.Context, userID uint64, amount int, jobType string) error
+	RefundCredits(ctx context.Context, userID uint64, amount int, jobType string) error
 }
 
 type Usecase struct {
@@ -30,10 +31,10 @@ type Usecase struct {
 	chapters *chapterrepo.Repository
 	stories  *storyrepo.Repository
 	rmqChan  *amqp.Channel
-	credits  CreditsDeductor
+	credits  CreditsHandler
 }
 
-func New(jobs *repository.Repository, chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel, credits CreditsDeductor) *Usecase {
+func New(jobs *repository.Repository, chapters *chapterrepo.Repository, stories *storyrepo.Repository, rmqChan *amqp.Channel, credits CreditsHandler) *Usecase {
 	return &Usecase{jobs: jobs, chapters: chapters, stories: stories, rmqChan: rmqChan, credits: credits}
 }
 
@@ -165,7 +166,7 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, userID uint64, chapt
 		Payload: string(payloadBytes),
 	}
 	body, _ := json.Marshal(task)
-	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_tasks_queue", false, false, amqp.Publishing{
+	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_image_queue", false, false, amqp.Publishing{ // Публикация в ml_image_queue
 		ContentType: "application/json",
 		Body:        body,
 	})
@@ -284,6 +285,25 @@ func (u *Usecase) ProcessMLResult(ctx context.Context, res rabbitmq.MLResultMess
 
 	if err := u.jobs.UpdateJob(ctx, taskID, res.Status, res.Result, errMsg); err != nil {
 		return err
+	}
+
+	// Обработка возврата кредитов в случае падения платной задачи
+	if res.Status == constants.AIJobStatusFailed {
+		var refundAmount int
+		switch job.Type {
+		case constants.AIJobTypeImageGeneration:
+			refundAmount = constants.CreditCostImageGen
+		case constants.AIJobTypeLogicCheck:
+			refundAmount = constants.CreditCostLogicCheck
+		case "canon_check":
+			refundAmount = constants.CreditCostCanonCheck
+		}
+
+		if refundAmount > 0 && job.StoryID != nil {
+			if story, err := u.stories.GetByID(ctx, *job.StoryID); err == nil && story != nil && story.AuthorID != nil {
+				_ = u.credits.RefundCredits(ctx, *story.AuthorID, refundAmount, job.Type)
+			}
+		}
 	}
 
 	if res.Status == constants.AIJobStatusCompleted && job.Type == constants.AIJobTypeImageGeneration {

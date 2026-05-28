@@ -12,3 +12,8 @@ const (
 	ModelGigaChat    = "GigaChat"
 	ModelGigaChatPro = "GigaChat-Pro"
 )
+
+const (
+	standartTimeout = 60 // Таймаут для текстовых запросов в секундах
+	imageTimeout    = 20 // Таймаут для запросов на генерацию изображений в секундах
+)

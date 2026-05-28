@@ -25,16 +25,29 @@ func NewPostgresPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	poolConfig.MaxConns = 20
 	poolConfig.MinConns = 2
 
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create connection pool: %w", err)
+	var pool *pgxpool.Pool
+	var connErr error
+
+	for i := 0; i < 5; i++ {
+		pool, connErr = pgxpool.NewWithConfig(ctx, poolConfig)
+		if connErr == nil {
+			pingErr := pool.Ping(ctx)
+			if pingErr == nil {
+				return pool, nil
+			}
+			connErr = pingErr
+			pool.Close() // Обязательно закрываем неисправный пул перед следующей попыткой
+		}
+
+		log.Printf("[Postgres Pool] Попытка %d: БД еще не готова (%v). Ждем...", i+1, connErr)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(3 * time.Second):
+		}
 	}
 
-	if err := pool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("database ping failed: %w", err)
-	}
-
-	return pool, nil
+	return nil, fmt.Errorf("database connection pool initialization failed after 5 retries: %w", connErr)
 }
 
 func RunMigrations(dsn string, migrationsPath string) error {
@@ -50,7 +63,7 @@ func RunMigrations(dsn string, migrationsPath string) error {
 		if pingErr == nil {
 			break
 		}
-		log.Printf("[Postgres] Попытка %d: БД еще не готова (%v). Ждем...", i+1, pingErr)
+		log.Printf("[Postgres Migrations] Попытка %d: БД еще не готова (%v). Ждем...", i+1, pingErr)
 		time.Sleep(3 * time.Second)
 	}
 

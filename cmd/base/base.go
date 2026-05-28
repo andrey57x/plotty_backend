@@ -50,7 +50,7 @@ var seededSlugs = []string{
 	"sherlock-kvartirantka-s-beyker-strit",
 	"sherlock-skripka-v-tumane",
 	"sherlock-poslednee-delo-doktora",
-	"sw-mehanik-s-vneshnego-kolca",
+	"sw-mehanik-s-vneshнего-kolca",
 	"sw-padavan-bez-mecha",
 	"sw-kontrabandistka-s-sovestyu",
 	"sw-golos-v-efire",
@@ -65,7 +65,7 @@ var seededSlugs = []string{
 	"orig-mayak-na-krayu-karty",
 	"orig-chasovshchik-chto-chinil-vremya",
 	"orig-pisma-iz-niotkuda",
-	"orig-hranitelnica-poslednego-sada",
+	"orig-hranitelnica-posledнего-sada",
 	"orig-devochka-i-kit",
 }
 
@@ -109,6 +109,7 @@ func main() {
 	defer ch.Close()
 
 	ch.QueueDeclare("ml_tasks_queue", true, false, false, false, nil)
+	ch.QueueDeclare("ml_image_queue", true, false, false, false, nil) // Декларация новой очереди в сидинге
 
 	stories, err := loadStories(ctx, pool)
 	if err != nil {
@@ -271,7 +272,7 @@ func publishImageGen(ctx context.Context, pool *pgxpool.Pool, ch *amqp.Channel, 
 		Type:    "image_gen",
 		Payload: string(payload),
 	}
-	return publish(ctx, ch, "ml_tasks_queue", task)
+	return publish(ctx, ch, "ml_image_queue", task) // Публикуем в новую изолированную очередь
 }
 
 func publish(ctx context.Context, ch *amqp.Channel, queue string, msg any) error {
