@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,8 +14,41 @@ import (
 	namederrors "github.com/fivecode/plotty/core/named_errors"
 	"github.com/fivecode/plotty/core/redis"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func deriveUsername(email string) string {
+	local := email
+	if i := strings.IndexByte(email, '@'); i >= 0 {
+		local = email[:i]
+	}
+
+	var b strings.Builder
+	for _, r := range local {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
+			b.WriteRune(r)
+		}
+	}
+	username := b.String()
+
+	if len(username) > 40 {
+		username = username[:40]
+	}
+	for len(username) < 3 {
+		username += "0"
+	}
+	return username
+}
+
+func usernameWithSuffix(base string, n int) string {
+	suffix := strconv.Itoa(n)
+	if len(base)+len(suffix) > 40 {
+		base = base[:40-len(suffix)]
+	}
+	return base + suffix
+}
 
 type AuthRepository struct {
 	Pool  *pgxpool.Pool
@@ -82,7 +116,6 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 		&user.CreatedAt,
 		&updatedAt,
 	)
-
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			log.Warn().Str("email", email).Msg("user not found by email")
@@ -109,7 +142,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 	log := logger.FromContext(ctx)
 	log.Info().Str("email", email).Msg("creating user in PostgreSQL")
 
-	username := strings.Split(email, "@")[0]
+	baseUsername := deriveUsername(email)
 
 	query := `
 		INSERT INTO users (email, password_hash, username)
@@ -117,44 +150,59 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 		RETURNING id, email, password_hash, username, avatar_url, bio, ai_credits, is_admin, created_at, updated_at
 	`
 
-	user := &models.User{}
-	var avatarURL, bio sql.NullString
-	var updatedAt sql.NullTime
-
-	err := r.Pool.QueryRow(ctx, query, email, passwordHash, username).Scan(
-		&user.ID,
-		&user.Email,
-		&user.Password,
-		&user.Username,
-		&avatarURL,
-		&bio,
-		&user.Credits,
-		&user.IsAdmin,
-		&user.CreatedAt,
-		&updatedAt,
-	)
-
-	if err != nil {
-		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
-			log.Warn().Str("email", email).Msg("user already exists")
-			return nil, namederrors.ErrUserExists
+	const maxAttempts = 5
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		username := baseUsername
+		if attempt > 0 {
+			username = usernameWithSuffix(baseUsername, attempt)
 		}
-		log.Error().Err(err).Msg("failed to create user in PostgreSQL")
-		return nil, fmt.Errorf("failed to create user: %w", err)
+
+		user := &models.User{}
+		var avatarURL, bio sql.NullString
+		var updatedAt sql.NullTime
+
+		err := r.Pool.QueryRow(ctx, query, email, passwordHash, username).Scan(
+			&user.ID,
+			&user.Email,
+			&user.Password,
+			&user.Username,
+			&avatarURL,
+			&bio,
+			&user.Credits,
+			&user.IsAdmin,
+			&user.CreatedAt,
+			&updatedAt,
+		)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				if pgErr.ConstraintName == "users_username_key" {
+					log.Warn().Str("username", username).Msg("username collision, retrying")
+					continue
+				}
+				log.Warn().Str("email", email).Msg("user already exists")
+				return nil, namederrors.ErrUserExists
+			}
+			log.Error().Err(err).Msg("failed to create user in PostgreSQL")
+			return nil, fmt.Errorf("failed to create user: %w", err)
+		}
+
+		if avatarURL.Valid {
+			user.AvatarURL = &avatarURL.String
+		}
+		if bio.Valid {
+			user.Bio = &bio.String
+		}
+		if updatedAt.Valid {
+			user.UpdatedAt = &updatedAt.Time
+		}
+
+		log.Info().Uint64("user_id", user.ID).Msg("user created in PostgreSQL")
+		return user, nil
 	}
 
-	if avatarURL.Valid {
-		user.AvatarURL = &avatarURL.String
-	}
-	if bio.Valid {
-		user.Bio = &bio.String
-	}
-	if updatedAt.Valid {
-		user.UpdatedAt = &updatedAt.Time
-	}
-
-	log.Info().Uint64("user_id", user.ID).Msg("user created in PostgreSQL")
-	return user, nil
+	log.Error().Str("email", email).Msg("failed to find a free username after retries")
+	return nil, fmt.Errorf("failed to create user: could not allocate a unique username")
 }
 
 func (r *AuthRepository) UpdateUser(ctx context.Context, userID uint64, username *string, avatarURL *string, bio *string) (*models.User, error) {
