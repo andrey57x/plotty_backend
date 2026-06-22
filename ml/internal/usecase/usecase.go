@@ -3,6 +3,8 @@ package usecase
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -651,3 +653,8 @@ const iterativeLoreSystemPrompt = `Ты — анализатор лора. Тв�
   "locations":[{"name": "Название", "state": "Текущее состояние и факты"}],
   "items":[{"name": "Предмет", "state": "Текущее состояние и факты"}]
 }`
+
+func sha256Hex(data string) string {
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
