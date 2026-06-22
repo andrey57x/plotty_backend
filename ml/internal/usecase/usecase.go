@@ -356,8 +356,13 @@ func findMentionedEntities(text string, entityNames []string) []string {
 
 const canonSystemPrompt = `Ты — строгий критик вселенной "%s".
 ОТВЕЧАЙ СТРОГО ПО ДЕЛУ. БЕЗ МАРКДАУН ФОРМАТИРОВАНИЯ. ТОЛЬКО ОБЫЧНЫЙ ТЕКСТ.
-Основывайся ТОЛЬКО на предоставленных фактах из канона.
-Если фактов недостаточно для вывода, не выдумывай детали, а укажи только на явные несоответствия с текстом.
+
+ВНИМАНИЕ: Тебе предоставлены различные факты канона. Некоторые из них могут быть совершенно не связаны с текущим текстом главы. Игнорируй те факты, которые не упоминаются и не имеют никакого отношения к происходящему в тексте главы. Не пытайся притянуть их за уши ради выполнения задачи!
+
+Опирайся в первую очередь на предоставленные факты из канона. Если предоставленных фактов недостаточно для вывода, ты имеешь право использовать свои собственные глубокие знания об этой вселенной для выявления явных, грубых и очевидных противоречий с каноном. 
+
+При этом будь лоялен к мелкому художественному вымыслу и не придумывай несуществующие детали сюжета.
+
 Твоя задача: найти противоречия между событиями главы и официальным каноном.
 
 ФАКТЫ ИЗ КАНОНА, которые были найдены для разных сцен главы:
@@ -431,7 +436,7 @@ func (u *AIUsecase) processCanonCheck(ctx context.Context, task sharedrmq.MLTask
 	userPrompt := fmt.Sprintf(canonSystemPrompt, fandomSlug, "- "+factsStr, task.Payload, warnings)
 
 	// 5. Отправляем в GigaChat
-	llmResponse, usage, err := u.llm.SendChat(gigachat.ModelGigaChat, "Ты строгий критик. Отвечай только на русском языке.", userPrompt)
+	llmResponse, usage, err := u.llm.SendChat(gigachat.ModelGigaChatMax, "Ты строгий критик. Отвечай только на русском языке.", userPrompt)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -522,7 +527,7 @@ func (u *AIUsecase) processLogicCheck(ctx context.Context, task sharedrmq.MLTask
 
 	userPrompt := fmt.Sprintf(logicSystemPrompt, currentLore, task.Payload)
 
-	llmResponse, usage, err := u.llm.SendChat(gigachat.ModelGigaChat, "Ты — строгий бета-ридер. Отвечай только на русском языке, без форматирования и эмодзи.", userPrompt)
+	llmResponse, usage, err := u.llm.SendChat(gigachat.ModelGigaChatMax, "Ты — строгий бета-ридер. Отвечай только на русском языке, без форматирования и эмодзи.", userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}
@@ -616,7 +621,7 @@ func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTas
 
 	userPrompt := fmt.Sprintf("ЛОР ДО ЭТОЙ ГЛАВЫ:\n%s\n\nТЕКСТ НОВОЙ ГЛАВЫ:\n%s", prevLore, task.Payload)
 
-	llmResponse, usage, err := u.llm.SendChat(gigachat.ModelGigaChat, iterativeLoreSystemPrompt, userPrompt)
+	llmResponse, usage, err := u.llm.SendChat(gigachat.ModelGigaChatPro, iterativeLoreSystemPrompt, userPrompt)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, "gigachat error: "+err.Error())
 	}

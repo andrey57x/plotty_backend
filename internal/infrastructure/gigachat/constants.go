@@ -11,6 +11,7 @@ const (
 const (
 	ModelGigaChat    = "GigaChat"
 	ModelGigaChatPro = "GigaChat-Pro"
+	ModelGigaChatMax = "GigaChat-Max"
 )
 
 const (
