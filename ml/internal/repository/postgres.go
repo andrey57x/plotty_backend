@@ -37,56 +37,75 @@ type MLRepository interface {
 
 	SearchStoriesByEmbedding(ctx context.Context, embedding []float32, limit int) ([]uuid.UUID, error)
 	InsertCanonFact(ctx context.Context, fact models.CanonFact) error
+
+	// Новые сигнатуры методов без эмбеддингов
+	GetGlobalCanonFacts(ctx context.Context, fandomSlug string) ([]string, error)
+	GetCanonFactsByEntities(ctx context.Context, fandomSlug string, entities []string) ([]string, error)
 }
 
 type postgresRepo struct {
-	db *pgxpool.Pool
+	pool *pgxpool.Pool
 }
 
-func NewPostgresRepository(db *pgxpool.Pool) MLRepository {
-	return &postgresRepo{db: db}
+func NewPostgresRepository(pool *pgxpool.Pool) MLRepository {
+	return &postgresRepo{pool: pool}
 }
 
 func (r *postgresRepo) CreateTask(ctx context.Context, id uuid.UUID, taskType, payload string) error {
-	query := `
+	now := time.Now().UTC()
+	_, err := r.pool.Exec(ctx, `
 		INSERT INTO ai_tasks (id, task_type, payload, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`
-	now := time.Now()
-	_, err := r.db.Exec(ctx, query, id, taskType, payload, "processing", now, now)
+		VALUES ($1, $2, $3, $4, $5, $5)
+	`, id, taskType, payload, "processing", now)
 	return err
 }
 
 func (r *postgresRepo) UpdateTaskResult(ctx context.Context, taskID uuid.UUID, status string, result interface{}) error {
-	var jsonData []byte
-	var err error
-	if result != nil {
-		jsonData, err = json.Marshal(result)
-		if err != nil {
-			return err
-		}
+	now := time.Now().UTC()
+	resJSON, err := json.Marshal(result)
+	if err != nil {
+		return err
 	}
-	_, err = r.db.Exec(ctx, `UPDATE ai_tasks SET status = $1, result = $2, updated_at = $3 WHERE id = $4`, status, jsonData, time.Now(), taskID)
-	return err
-}
-
-func (r *postgresRepo) UpdateSummary(ctx context.Context, storyID uuid.UUID, summary string) error {
-	query := `
-		INSERT INTO story_lorebooks (story_id, summary, updated_at)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (story_id) DO UPDATE 
-		SET summary = $2, updated_at = $3
-	`
-	_, err := r.db.Exec(ctx, query, storyID, summary, time.Now())
+	_, err = r.pool.Exec(ctx, `
+		UPDATE ai_tasks SET status = $2, result = $3, updated_at = $4 WHERE id = $1
+	`, taskID, status, resJSON, now)
 	return err
 }
 
 func (r *postgresRepo) GetLorebook(ctx context.Context, storyID uuid.UUID) (string, error) {
-	return "{}", nil
+	var out string
+	err := r.pool.QueryRow(ctx, `
+		SELECT entities::text FROM story_lorebooks WHERE story_id = $1
+	`, storyID).Scan(&out)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "{}", nil
+	}
+	return out, err
 }
 
 func (r *postgresRepo) UpsertLorebook(ctx context.Context, storyID, chapterID uuid.UUID, entities string) error {
-	return nil
+	now := time.Now().UTC()
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO story_lorebooks (story_id, entities, last_processed_chapter_id, updated_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (story_id) DO UPDATE SET
+			entities = EXCLUDED.entities,
+			last_processed_chapter_id = EXCLUDED.last_processed_chapter_id,
+			updated_at = EXCLUDED.updated_at
+	`, storyID, entities, chapterID, now)
+	return err
+}
+
+func (r *postgresRepo) UpdateSummary(ctx context.Context, storyID uuid.UUID, summary string) error {
+	now := time.Now().UTC()
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO story_lorebooks (story_id, summary, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (story_id) DO UPDATE SET
+			summary = EXCLUDED.summary,
+			updated_at = EXCLUDED.updated_at
+	`, storyID, summary, now)
+	return err
 }
 
 func (r *postgresRepo) UpsertChapterLorebook(ctx context.Context, chapterID, storyID uuid.UUID, contentHash, entities string) error {
@@ -96,13 +115,13 @@ func (r *postgresRepo) UpsertChapterLorebook(ctx context.Context, chapterID, sto
 		ON CONFLICT (chapter_id) DO UPDATE 
 		SET entities = $4, content_hash = $3, updated_at = $5
 	`
-	_, err := r.db.Exec(ctx, query, chapterID, storyID, contentHash, entities, time.Now())
+	_, err := r.pool.Exec(ctx, query, chapterID, storyID, contentHash, entities, time.Now().UTC())
 	return err
 }
 
 func (r *postgresRepo) GetChapterLoreHash(ctx context.Context, chapterID uuid.UUID) (string, error) {
 	var hash string
-	err := r.db.QueryRow(ctx, "SELECT content_hash FROM chapter_lorebooks WHERE chapter_id = $1", chapterID).Scan(&hash)
+	err := r.pool.QueryRow(ctx, "SELECT content_hash FROM chapter_lorebooks WHERE chapter_id = $1", chapterID).Scan(&hash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", nil
@@ -117,7 +136,7 @@ func (r *postgresRepo) GetMergedLore(ctx context.Context, chapterIDs []uuid.UUID
 		return "{}", nil
 	}
 
-	rows, err := r.db.Query(ctx, "SELECT entities FROM chapter_lorebooks WHERE chapter_id = ANY($1) ORDER BY updated_at ASC", chapterIDs)
+	rows, err := r.pool.Query(ctx, "SELECT entities FROM chapter_lorebooks WHERE chapter_id = ANY($1) ORDER BY updated_at ASC", chapterIDs)
 	if err != nil {
 		return "", err
 	}
@@ -172,17 +191,17 @@ func (r *postgresRepo) GetMergedLore(ctx context.Context, chapterIDs []uuid.UUID
 }
 
 func (r *postgresRepo) DeleteStoryLore(ctx context.Context, storyID uuid.UUID) error {
-	_, err := r.db.Exec(ctx, "DELETE FROM chapter_lorebooks WHERE story_id = $1", storyID)
+	_, err := r.pool.Exec(ctx, "DELETE FROM chapter_lorebooks WHERE story_id = $1", storyID)
 	if err != nil {
 		return err
 	}
-	_, err = r.db.Exec(ctx, "DELETE FROM story_lorebooks WHERE story_id = $1", storyID)
+	_, err = r.pool.Exec(ctx, "DELETE FROM story_lorebooks WHERE story_id = $1", storyID)
 	return err
 }
 
 func (r *postgresRepo) GetLoreByChapterID(ctx context.Context, chapterID uuid.UUID) (string, error) {
 	var entities string
-	err := r.db.QueryRow(ctx, "SELECT entities FROM chapter_lorebooks WHERE chapter_id = $1", chapterID).Scan(&entities)
+	err := r.pool.QueryRow(ctx, "SELECT entities FROM chapter_lorebooks WHERE chapter_id = $1", chapterID).Scan(&entities)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "{}", nil
@@ -210,7 +229,7 @@ func (r *postgresRepo) SearchCanonFacts(ctx context.Context, fandomSlug string, 
 		ORDER BY embedding <=> $2::vector 
 		LIMIT $3
 	`
-	rows, err := r.db.Query(ctx, query, fandomSlug, vecStr, limit)
+	rows, err := r.pool.Query(ctx, query, fandomSlug, vecStr, limit)
 	if err != nil {
 		return nil, fmt.Errorf("db.Query error: %w", err)
 	}
@@ -233,7 +252,7 @@ func (r *postgresRepo) SearchCanonFacts(ctx context.Context, fandomSlug string, 
 }
 
 func (r *postgresRepo) GetStoryLoreNames(ctx context.Context, storyID uuid.UUID) ([]string, error) {
-	rows, err := r.db.Query(ctx, "SELECT entities FROM chapter_lorebooks WHERE story_id = $1", storyID)
+	rows, err := r.pool.Query(ctx, "SELECT entities FROM chapter_lorebooks WHERE story_id = $1", storyID)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +298,7 @@ func (r *postgresRepo) GetCanonEntityNames(ctx context.Context, fandomSlug strin
 	if fandomSlug == "" {
 		return nil, nil
 	}
-	rows, err := r.db.Query(ctx, "SELECT entity_name FROM canon_lorebooks WHERE fandom_slug = $1 AND entity_name IS NOT NULL", fandomSlug)
+	rows, err := r.pool.Query(ctx, "SELECT entity_name FROM canon_lorebooks WHERE fandom_slug = $1 AND entity_name IS NOT NULL", fandomSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -303,13 +322,13 @@ func (r *postgresRepo) UpdateSummaryAndEmbedding(ctx context.Context, storyID uu
 		SET summary = $2, embedding = $3::vector, updated_at = $4
 	`
 	vecStr := vecToString(embedding)
-	_, err := r.db.Exec(ctx, query, storyID, summary, vecStr, time.Now())
+	_, err := r.pool.Exec(ctx, query, storyID, summary, vecStr, time.Now().UTC())
 	return err
 }
 
 func (r *postgresRepo) GetSimilarStories(ctx context.Context, storyID uuid.UUID, limit int) ([]uuid.UUID, error) {
 	var vecStr string
-	err := r.db.QueryRow(ctx, "SELECT embedding::text FROM story_lorebooks WHERE story_id = $1 AND embedding IS NOT NULL", storyID).Scan(&vecStr)
+	err := r.pool.QueryRow(ctx, "SELECT embedding::text FROM story_lorebooks WHERE story_id = $1 AND embedding IS NOT NULL", storyID).Scan(&vecStr)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -324,7 +343,7 @@ func (r *postgresRepo) GetSimilarStories(ctx context.Context, storyID uuid.UUID,
 		ORDER BY embedding <=> $2::vector 
 		LIMIT $3
 	`
-	rows, err := r.db.Query(ctx, query, storyID, vecStr, limit)
+	rows, err := r.pool.Query(ctx, query, storyID, vecStr, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +369,7 @@ func (r *postgresRepo) SearchStoriesByEmbedding(ctx context.Context, embedding [
 		ORDER BY embedding <=> $1::vector 
 		LIMIT $2
 	`
-	rows, err := r.db.Query(ctx, query, vecStr, limit)
+	rows, err := r.pool.Query(ctx, query, vecStr, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -372,6 +391,55 @@ func (r *postgresRepo) InsertCanonFact(ctx context.Context, fact models.CanonFac
 		VALUES ($1, $2, $3, $4, $5::vector)
 	`
 	vecStr := vecToString(fact.Embedding)
-	_, err := r.db.Exec(ctx, query, fact.ID, fact.FandomSlug, fact.EntityName, fact.FactText, vecStr)
+	_, err := r.pool.Exec(ctx, query, fact.ID, fact.FandomSlug, fact.EntityName, fact.FactText, vecStr)
 	return err
+}
+
+// GetGlobalCanonFacts вытаскивает все факты, которые помечены как глобальные правила
+func (r *postgresRepo) GetGlobalCanonFacts(ctx context.Context, fandomSlug string) ([]string, error) {
+	query := `
+		SELECT fact_text 
+		FROM canon_lorebooks 
+		WHERE fandom_slug = $1 AND is_global_rule = true
+	`
+	rows, err := r.pool.Query(ctx, query, fandomSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var facts []string
+	for rows.Next() {
+		var fact string
+		if err := rows.Scan(&fact); err == nil {
+			facts = append(facts, fact)
+		}
+	}
+	return facts, nil
+}
+
+// GetCanonFactsByEntities вытаскивает факты о конкретных персонажах и объектах
+func (r *postgresRepo) GetCanonFactsByEntities(ctx context.Context, fandomSlug string, entities []string) ([]string, error) {
+	if len(entities) == 0 {
+		return nil, nil
+	}
+	query := `
+		SELECT fact_text 
+		FROM canon_lorebooks 
+		WHERE fandom_slug = $1 AND LOWER(entity_name) = ANY($2)
+	`
+	rows, err := r.pool.Query(ctx, query, fandomSlug, entities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var facts []string
+	for rows.Next() {
+		var fact string
+		if err := rows.Scan(&fact); err == nil {
+			facts = append(facts, fact)
+		}
+	}
+	return facts, nil
 }

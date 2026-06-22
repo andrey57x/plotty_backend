@@ -57,7 +57,7 @@ func NewApp(cfg *config.Config, rmqConn *amqp.Connection, dbPool *pgxpool.Pool) 
 
 	embClient := adapters.NewEmbeddingsClient(cfg.EmbeddingsURL)
 
-	repo := repository.NewPostgresRepository(dbPool)
+	repo := repository.NewPostgresRepository(dbPool) // Используем созданный репозиторий
 	uc := usecase.NewAIUsecase(repo, ltAdapter, gcClient, st, embClient, rmqChan)
 
 	consumer, err := rabbitmq.NewConsumer(rmqConn)

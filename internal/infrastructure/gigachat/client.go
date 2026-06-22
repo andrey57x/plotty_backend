@@ -40,25 +40,28 @@ func NewClient(authKey string) *Client {
 		authKey: authKey,
 		httpClient: &http.Client{
 			Transport: customTransport,
-			Timeout:   standartTimeout * time.Second, // Оставляем стандартный таймаут для текста
 		},
 		imageClient: &http.Client{
 			Transport: customTransport,
-			Timeout:   imageTimeout * time.Second, // Ограничиваем таймаут для картинок до 20 секунд
+			Timeout:   20 * time.Second,
 		},
 	}
 }
 
 func (c *Client) ensureToken() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.token != "" && time.Now().Add(1*time.Minute).Before(c.expiresAt) {
+	if time.Now().Before(c.expiresAt) && c.token != "" {
 		return nil
 	}
 
-	payload := strings.NewReader("scope=GIGACHAT_API_PERS")
-	req, err := http.NewRequest("POST", authURL, payload)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Двойная проверка на случай, если токен обновился, пока мы ждали мьютекс
+	if time.Now().Before(c.expiresAt) && c.token != "" {
+		return nil
+	}
+
+	req, err := http.NewRequest("POST", authURL, strings.NewReader("scope=GIGACHAT_API_PERS"))
 	if err != nil {
 		return err
 	}
@@ -76,7 +79,7 @@ func (c *Client) ensureToken() error {
 
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
-		return fmt.Errorf("auth failed: %s", string(body))
+		return fmt.Errorf("auth failed with status %d: %s", res.StatusCode, string(body))
 	}
 
 	var tResp tokenResponse
@@ -89,13 +92,14 @@ func (c *Client) ensureToken() error {
 	return nil
 }
 
-// SendChat отправляет текстовый запрос с указанием конкретной модели
-func (c *Client) SendChat(modelName, systemPrompt, userText string) (string, error) {
+// SendChat отправляет текстовый запрос с указанием конкретной модели и возвращает токены
+func (c *Client) SendChat(modelName, systemPrompt, userText string) (string, Usage, error) {
 	c.apiMu.Lock()
 	defer c.apiMu.Unlock()
 
+	var emptyUsage Usage
 	if err := c.ensureToken(); err != nil {
-		return "", err
+		return "", emptyUsage, err
 	}
 
 	reqBody := ChatRequest{
@@ -125,7 +129,7 @@ func (c *Client) GenerateImage(prompt string) (string, error) {
 			{Role: "user", Content: "Нарисуй: " + prompt},
 		},
 		Temperature:  0.7,
-		FunctionCall: "auto", // ТА САМАЯ НАСТРОЙКА ИЗ ДОКУМЕНТАЦИИ
+		FunctionCall: "auto",
 	}
 
 	content, err := c.doImageChatRequest(reqBody)
@@ -133,7 +137,6 @@ func (c *Client) GenerateImage(prompt string) (string, error) {
 		return "", err
 	}
 
-	// Извлекаем file_id из тега <img src="...">
 	match := imgTagRegex.FindStringSubmatch(content)
 	if len(match) < 2 {
 		return "", fmt.Errorf("file_id not found in response: %s", content)
@@ -159,7 +162,7 @@ func (c *Client) DownloadFile(fileID string) ([]byte, error) {
 
 	req.Header.Add("Authorization", "Bearer "+c.token)
 
-	res, err := c.imageClient.Do(req) // Используем imageClient
+	res, err := c.imageClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -173,15 +176,16 @@ func (c *Client) DownloadFile(fileID string) ([]byte, error) {
 	return io.ReadAll(res.Body)
 }
 
-func (c *Client) doChatRequest(reqBody ChatRequest) (string, error) {
+func (c *Client) doChatRequest(reqBody ChatRequest) (string, Usage, error) {
+	var emptyUsage Usage
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		return "", emptyUsage, err
 	}
 
 	req, err := http.NewRequest("POST", chatURL, strings.NewReader(string(jsonData)))
 	if err != nil {
-		return "", err
+		return "", emptyUsage, err
 	}
 
 	req.Header.Add("Content-Type", "application/json")
@@ -189,20 +193,20 @@ func (c *Client) doChatRequest(reqBody ChatRequest) (string, error) {
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", emptyUsage, err
 	}
 	defer res.Body.Close()
 
 	var chatResp ChatResponse
 	if err := json.NewDecoder(res.Body).Decode(&chatResp); err != nil {
-		return "", err
+		return "", emptyUsage, err
 	}
 
 	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("empty choices from gigachat")
+		return "", emptyUsage, fmt.Errorf("empty choices from gigachat")
 	}
 
-	return chatResp.Choices[0].Message.Content, nil
+	return chatResp.Choices[0].Message.Content, chatResp.Usage, nil
 }
 
 func (c *Client) doImageChatRequest(reqBody ChatRequest) (string, error) {
@@ -219,7 +223,7 @@ func (c *Client) doImageChatRequest(reqBody ChatRequest) (string, error) {
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", "Bearer "+c.token)
 
-	res, err := c.imageClient.Do(req) // Используем imageClient для картинок
+	res, err := c.imageClient.Do(req)
 	if err != nil {
 		return "", err
 	}

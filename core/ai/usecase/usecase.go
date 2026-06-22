@@ -13,6 +13,7 @@ import (
 	"github.com/fivecode/plotty/core/ai/repository"
 	chapterrepo "github.com/fivecode/plotty/core/chapter/repository"
 	"github.com/fivecode/plotty/core/constants"
+	"github.com/fivecode/plotty/core/logger"
 	"github.com/fivecode/plotty/core/models"
 	"github.com/fivecode/plotty/core/named_errors"
 	storyrepo "github.com/fivecode/plotty/core/story/repository"
@@ -129,10 +130,6 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, userID uint64, chapt
 
 	contentHash := sha256Hex(content + "|" + prompt)
 
-	// if cachedJob, err := u.jobs.GetCompletedJobByHash(ctx, chapterID, constants.AIJobTypeImageGeneration, contentHash); err == nil {
-	// 	return cachedJob.ID, nil
-	// }
-
 	if err := u.credits.DeductCredits(ctx, userID, constants.CreditCostImageGen, constants.AIJobTypeImageGeneration); err != nil {
 		return uuid.Nil, err
 	}
@@ -166,7 +163,7 @@ func (u *Usecase) StartImageGeneration(ctx context.Context, userID uint64, chapt
 		Payload: string(payloadBytes),
 	}
 	body, _ := json.Marshal(task)
-	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_image_queue", false, false, amqp.Publishing{ // Публикация в ml_image_queue
+	_ = u.rmqChan.PublishWithContext(ctx, "", "ml_image_queue", false, false, amqp.Publishing{
 		ContentType: "application/json",
 		Body:        body,
 	})
@@ -244,6 +241,8 @@ func (u *Usecase) StartLogicCheck(ctx context.Context, userID uint64, chapterID 
 }
 
 func (u *Usecase) ProcessMLResult(ctx context.Context, res rabbitmq.MLResultMessage) error {
+	log := logger.FromContext(ctx)
+
 	if res.Type == "generate_summary" && res.Status == "completed" {
 		storyIDStr, ok := res.Metadata["story_id"]
 		if !ok {
@@ -285,6 +284,18 @@ func (u *Usecase) ProcessMLResult(ctx context.Context, res rabbitmq.MLResultMess
 
 	if err := u.jobs.UpdateJob(ctx, taskID, res.Status, res.Result, errMsg); err != nil {
 		return err
+	}
+
+	// Сохранение и логирование потраченных токенов GigaChat
+	if res.PromptTokens > 0 || res.CompletionTokens > 0 {
+		log.Info().
+			Str("job_id", res.TaskID).
+			Str("job_type", job.Type).
+			Int("prompt_tokens", res.PromptTokens).
+			Int("completion_tokens", res.CompletionTokens).
+			Int("total_tokens", res.TotalTokens).
+			Msg("Логирование токенов в бэкенде")
+		_ = u.jobs.UpdateJobTokens(ctx, taskID, res.PromptTokens, res.CompletionTokens, res.TotalTokens)
 	}
 
 	// Обработка возврата кредитов в случае падения платной задачи

@@ -19,13 +19,15 @@ type MLErrorDetails struct {
 }
 
 // MLResultMessage - Сообщение с результатом (ML -> Core)
-// MLResultMessage - Сообщение с результатом (ML -> Core)
 type MLResultMessage struct {
-	TaskID   string            `json:"task_id"`
-	TraceID  string            `json:"trace_id"`
-	Type     string            `json:"type"`
-	Status   string            `json:"status"`
-	Result   json.RawMessage   `json:"result,omitempty"`
-	Error    *MLErrorDetails   `json:"error,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
+	TaskID           string            `json:"task_id"`
+	TraceID          string            `json:"trace_id"`
+	Type             string            `json:"type"`
+	Status           string            `json:"status"`
+	Result           json.RawMessage   `json:"result,omitempty"`
+	Error            *MLErrorDetails   `json:"error,omitempty"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
+	PromptTokens     int               `json:"prompt_tokens,omitempty"`     // Добавлено для логирования входных токенов
+	CompletionTokens int               `json:"completion_tokens,omitempty"` // Добавлено для логирования выходных токенов
+	TotalTokens      int               `json:"total_tokens,omitempty"`      // Добавлено для логирования общих токенов
 }

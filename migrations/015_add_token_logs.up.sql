@@ -1,0 +1,3 @@
+ALTER TABLE ai_jobs ADD COLUMN IF NOT EXISTS prompt_tokens INT;
+ALTER TABLE ai_jobs ADD COLUMN IF NOT EXISTS completion_tokens INT;
+ALTER TABLE ai_jobs ADD COLUMN IF NOT EXISTS total_tokens INT;

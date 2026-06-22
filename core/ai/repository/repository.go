@@ -63,6 +63,16 @@ func (r *Repository) UpdateJob(ctx context.Context, id uuid.UUID, status string,
 	return nil
 }
 
+// UpdateJobTokens сохраняет статистику по тратам токенов GigaChat (Новый метод)
+func (r *Repository) UpdateJobTokens(ctx context.Context, id uuid.UUID, promptTokens, completionTokens, totalTokens int) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE ai_jobs 
+		SET prompt_tokens = $2, completion_tokens = $3, total_tokens = $4
+		WHERE id = $1
+	`, id, promptTokens, completionTokens, totalTokens)
+	return err
+}
+
 func (r *Repository) GetJob(ctx context.Context, id uuid.UUID) (*models.AIJob, error) {
 	var j models.AIJob
 	err := r.pool.QueryRow(ctx, `

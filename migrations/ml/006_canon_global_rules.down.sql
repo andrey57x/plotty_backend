@@ -1,0 +1,1 @@
+ALTER TABLE canon_lorebooks DROP COLUMN IF EXISTS is_global_rule;

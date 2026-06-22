@@ -13,8 +13,15 @@ type ChatRequest struct {
 	FunctionCall string    `json:"function_call,omitempty"`
 }
 
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens"`     // Входные токены
+	CompletionTokens int `json:"completion_tokens"` // Выходные токены
+	TotalTokens      int `json:"total_tokens"`      // Сумма токенов
+}
+
 type ChatResponse struct {
 	Choices []struct {
 		Message Message `json:"message"`
 	} `json:"choices"`
+	Usage Usage `json:"usage"` // Добавлено поле для парсинга токенов из API
 }
