@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Копируем файлы зависимостей из корня
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod tidy && go mod download
 
 # Копируем весь проект, чтобы были доступны internal и shared части
 COPY . .
