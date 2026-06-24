@@ -7,6 +7,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/gorilla/mux v1.8.1
 	github.com/gosimple/slug v1.15.0
+	github.com/kljensen/snowball v0.10.0
 	github.com/lib/pq v1.12.0
 	github.com/minio/minio-go/v7 v7.0.99
 	github.com/pkg/errors v0.9.1
@@ -14,7 +15,6 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/viper v1.21.0
 	golang.org/x/crypto v0.49.0
-	github.com/kljensen/snowball v0.10.0
 )
 
 require (
