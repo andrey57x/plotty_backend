@@ -2,7 +2,8 @@ name: Deploy Backend
 
 on:
   push:
-    branches: ["main", "deploy"]
+    branches: ["main"]
+    # branches: ["main", "deploy"]
 
 jobs:
   build-and-push:

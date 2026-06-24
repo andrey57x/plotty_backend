@@ -7,6 +7,7 @@ import (
 
 	"github.com/fivecode/plotty/internal/infrastructure/languagetool"
 	"github.com/fivecode/plotty/ml/internal/models"
+	"github.com/fivecode/plotty/ml/internal/stemmer"
 )
 
 type LanguageToolAdapter struct {
@@ -19,21 +20,10 @@ func NewLanguageToolAdapter(client *languagetool.Client) *LanguageToolAdapter {
 	}
 }
 
-func (a *LanguageToolAdapter) CheckText(ctx context.Context, text string, allowedWords []string) (models.SpellcheckResult, error) {
+func (a *LanguageToolAdapter) CheckText(ctx context.Context, text string, allowedStems map[string]struct{}) (models.SpellcheckResult, error) {
 	resp, err := a.client.Check(ctx, text)
 	if err != nil {
 		return models.SpellcheckResult{}, err
-	}
-
-	allowedMap := make(map[string]struct{}, len(allowedWords))
-	for _, w := range allowedWords {
-		cleanWord := strings.ToLower(strings.TrimSpace(w))
-		if cleanWord != "" {
-			parts := strings.Fields(cleanWord)
-			for _, p := range parts {
-				allowedMap[p] = struct{}{}
-			}
-		}
 	}
 
 	res := models.SpellcheckResult{
@@ -49,8 +39,24 @@ func (a *LanguageToolAdapter) CheckText(ctx context.Context, text string, allowe
 		}
 
 		cleanFrag := strings.ToLower(strings.TrimSpace(fragment))
-		if _, ok := allowedMap[cleanFrag]; ok {
-			continue
+
+		words := stemmer.WordRegex.FindAllString(cleanFrag, -1)
+		if len(words) > 0 {
+			allMatch := true
+			for _, w := range words {
+				stem := stemmer.CleanAndStemToken(w)
+				if stem == "" {
+					continue // Игнорируем предлоги и союзы во фрагменте
+				}
+				if _, ok := allowedStems[stem]; !ok {
+					allMatch = false
+					break
+				}
+			}
+			// Если все составные части слова совпали с нашими исключениями — не считаем это ошибкой!
+			if allMatch {
+				continue
+			}
 		}
 
 		suggestion := ""

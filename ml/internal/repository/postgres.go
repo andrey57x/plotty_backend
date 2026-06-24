@@ -41,6 +41,8 @@ type MLRepository interface {
 	// Новые сигнатуры методов без эмбеддингов
 	GetGlobalCanonFacts(ctx context.Context, fandomSlug string) ([]string, error)
 	GetCanonFactsByEntities(ctx context.Context, fandomSlug string, entities []string) ([]string, error)
+
+	GetFandomFactTexts(ctx context.Context, fandomSlug string) ([]string, error)
 }
 
 type postgresRepo struct {
@@ -442,4 +444,22 @@ func (r *postgresRepo) GetCanonFactsByEntities(ctx context.Context, fandomSlug s
 		}
 	}
 	return facts, nil
+}
+
+// GetFandomFactTexts достает абсолютно все тексты фактов конкретного фэндома
+func (r *postgresRepo) GetFandomFactTexts(ctx context.Context, fandomSlug string) ([]string, error) {
+	rows, err := r.pool.Query(ctx, "SELECT fact_text FROM canon_lorebooks WHERE fandom_slug = $1", fandomSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var texts []string
+	for rows.Next() {
+		var text string
+		if err := rows.Scan(&text); err == nil {
+			texts = append(texts, text)
+		}
+	}
+	return texts, rows.Err()
 }

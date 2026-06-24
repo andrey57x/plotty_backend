@@ -21,7 +21,7 @@ import (
 )
 
 type Spellchecker interface {
-	CheckText(ctx context.Context, text string, allowedWords []string) (models.SpellcheckResult, error)
+	CheckText(ctx context.Context, text string, allowedStems map[string]struct{}) (models.SpellcheckResult, error)
 }
 
 type LLMProvider interface {
@@ -45,6 +45,7 @@ type AIUsecase struct {
 	storage      FileStorage
 	embeddings   EmbeddingsProvider
 	rmqChan      *amqp.Channel
+	vocabManager *VocabularyManager // НАШ НОВЫЙ МЕНЕДЖЕР СЛОВАРЕЙ В RAM
 }
 
 func NewAIUsecase(
@@ -62,6 +63,7 @@ func NewAIUsecase(
 		storage:      st,
 		embeddings:   emb,
 		rmqChan:      rmqChan,
+		vocabManager: NewVocabularyManager(repo), // Инициализация менеджера
 	}
 }
 
@@ -131,17 +133,27 @@ func (u *AIUsecase) ProcessSpellcheck(ctx context.Context, task sharedrmq.MLTask
 		return err
 	}
 
-	allowedWords := make([]string, 0)
-	if storyID, err := uuid.Parse(storyIDStr); err == nil && storyID != uuid.Nil {
-		storyNames, _ := u.repo.GetStoryLoreNames(ctx, storyID)
-		allowedWords = append(allowedWords, storyNames...)
-	}
+	// Собираем основы разрешенных слов (Fandom + Story)
+	allowedStems := make(map[string]struct{})
+
+	// 1. Подгружаем основы слов канона фэндома
 	if fandomSlug != "" {
-		canonNames, _ := u.repo.GetCanonEntityNames(ctx, fandomSlug)
-		allowedWords = append(allowedWords, canonNames...)
+		fandomVocab := u.vocabManager.GetFandomVocabulary(ctx, fandomSlug)
+		for k := range fandomVocab {
+			allowedStems[k] = struct{}{}
+		}
 	}
 
-	res, err := u.spellchecker.CheckText(ctx, input.Content, allowedWords)
+	// 2. Подгружаем основы слов, созданные автором конкретного фанфика
+	if storyID, err := uuid.Parse(storyIDStr); err == nil && storyID != uuid.Nil {
+		storyVocab := u.vocabManager.GetStoryVocabulary(ctx, storyID)
+		for k := range storyVocab {
+			allowedStems[k] = struct{}{}
+		}
+	}
+
+	// 3. Вызываем проверку орфографии, передавая карту разрешенных основ
+	res, err := u.spellchecker.CheckText(ctx, input.Content, allowedStems)
 	if err != nil {
 		return u.publishResult(ctx, task, "failed", nil, err.Error())
 	}
@@ -640,6 +652,9 @@ func (u *AIUsecase) processExtractLore(ctx context.Context, task sharedrmq.MLTas
 	if err := u.repo.UpsertChapterLorebook(ctx, chapterID, storyID, contentHash, cleanJSONStr); err != nil {
 		return u.publishResultWithTokens(ctx, task, "failed", nil, "failed to save chapter lore: "+err.Error(), usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
 	}
+
+	// Сбрасываем словарь исключений для фанфика, так как его лор обновился!
+	u.vocabManager.InvalidateStoryVocabulary(storyID)
 
 	return u.publishResultWithTokens(ctx, task, "completed", json.RawMessage(cleanJSONStr), "", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
 }
